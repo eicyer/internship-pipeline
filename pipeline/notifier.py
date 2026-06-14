@@ -3,13 +3,6 @@ import os
 import requests
 
 
-def _escape(text: str) -> str:
-    """Escape Telegram MarkdownV2 special characters."""
-    for ch in r"\_*[]()~`>#+-=|{}.!":
-        text = text.replace(ch, f"\\{ch}")
-    return text
-
-
 def send_telegram(job, analysis: dict, sheet_url: str = "") -> None:
     token = os.environ["TELEGRAM_BOT_TOKEN"]
     chat_id = os.environ["TELEGRAM_CHAT_ID"]
@@ -17,10 +10,17 @@ def send_telegram(job, analysis: dict, sheet_url: str = "") -> None:
     score = analysis.get("fit_score", "?")
     grad_flag = "YES" if analysis.get("grad_flag") else "NO"
     skills = ", ".join(analysis.get("skills_matched", [])) or "—"
-    bullets = analysis.get("bullet_suggestions", [])
 
-    bullet_lines = "\n".join(f'• "{b}"' for b in bullets)
-    sheets_link = f"\n\n[Open in Sheets →]({sheet_url})" if sheet_url else ""
+    # Build experience sections for top 3 ranked matches
+    ranked = analysis.get("ranked_experiences", [])
+    exp_lines = []
+    for exp in ranked[:3]:
+        bullets = exp.get("optimized_bullets", [])
+        if not bullets:
+            continue
+        exp_lines.append(f"*{exp['company']}* ({exp['role']})")
+        for b in bullets:
+            exp_lines.append(f'  • "{b}"')
 
     text = (
         f"🆕 *{job.company}* — {job.role}\n"
@@ -28,9 +28,10 @@ def send_telegram(job, analysis: dict, sheet_url: str = "") -> None:
         f"⭐ Fit: {score}/10 | 🎓 Grad flag: {grad_flag}\n"
         f"✅ Skills match: {skills}"
     )
-    if bullet_lines:
-        text += f"\n\n💡 *Bullet suggestions:*\n{bullet_lines}"
-    text += sheets_link
+    if exp_lines:
+        text += "\n\n💡 *Top experiences to highlight:*\n" + "\n".join(exp_lines)
+    if sheet_url:
+        text += f"\n\n[Open in Sheets →]({sheet_url})"
 
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {

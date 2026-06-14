@@ -1,9 +1,6 @@
 import json
-import os
-import sys
 
 STATE_FILE = "data/seen_jobs.json"
-RESUME_PATH = "resume.docx"
 
 
 def load_seen() -> set:
@@ -29,7 +26,6 @@ def main() -> None:
 
     seen = load_seen()
 
-    # Supplement dedup from Sheets (handles first-run / lost state file)
     try:
         sheet_links = get_existing_links()
         seen |= sheet_links
@@ -38,13 +34,9 @@ def main() -> None:
 
     print(f"Loaded {len(seen)} already-seen job links")
 
-    # Parse resume once
-    try:
-        skills_str, bullets = parse_resume(RESUME_PATH)
-        print(f"Skills extracted: {skills_str[:120]}")
-    except Exception as e:
-        print(f"Resume parse failed: {e}")
-        sys.exit(1)
+    skills_str, experiences = parse_resume()
+    print(f"Skills: {skills_str}")
+    print(f"Experiences loaded: {len(experiences)}")
 
     new_jobs = fetch_new_jobs(seen)
     if not new_jobs:
@@ -65,12 +57,11 @@ def main() -> None:
     print(f"\n{len(passing)} matches — running Stage 2 analysis (Sonnet)...")
     for job, grad_flag_hint in passing:
         print(f"  Analyzing: {job.company} — {job.role}")
-        analysis = sonnet_analyze(job, skills_str, bullets, grad_flag_hint)
+        analysis = sonnet_analyze(job, skills_str, experiences, grad_flag_hint)
         row_num = append_row(job, analysis)
         sheet_url = get_sheet_url(row_num)
         send_telegram(job, analysis, sheet_url)
 
-    # Mark ALL fetched jobs (not just matches) as seen so we don't reprocess them
     save_seen(seen | {j.apply_link for j in new_jobs})
     print(f"\nDone. {len(passing)} job(s) logged and notified.")
 

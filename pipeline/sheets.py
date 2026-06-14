@@ -51,10 +51,24 @@ def get_existing_links() -> set:
     return {row[0] for row in rows[1:] if row}  # skip header
 
 
+def _format_bullets_for_sheet(analysis: dict) -> str:
+    """Format top 3 ranked experiences with their optimized bullets for the sheet cell."""
+    ranked = analysis.get("ranked_experiences", [])
+    parts = []
+    for exp in ranked:
+        bullets = exp.get("optimized_bullets", [])
+        if not bullets:
+            continue
+        parts.append(f"[{exp['company']} → #{len(parts)+1}]")
+        for b in bullets:
+            parts.append(f"• {b}")
+    return "\n".join(parts)
+
+
 def append_row(job, analysis: dict) -> int:
     """Append one job row. Returns the 1-based row index of the new row."""
     svc = _get_service()
-    bullets = "\n".join(analysis.get("bullet_suggestions", []))
+    bullets = _format_bullets_for_sheet(analysis)
     skills = ", ".join(analysis.get("skills_matched", []))
     grad_flag = "YES" if analysis.get("grad_flag") else "NO"
     row = [
