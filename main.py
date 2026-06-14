@@ -1,6 +1,12 @@
 import json
+import os
 
 STATE_FILE = "data/seen_jobs.json"
+
+# Set MAX_JOBS_PER_REPO=7 locally when testing (~28 jobs total across 4 repos).
+# Leave unset in production — the daily cron only sees the delta anyway.
+_max = os.getenv("MAX_JOBS_PER_REPO")
+MAX_JOBS_PER_REPO: int | None = int(_max) if _max else None
 
 
 def load_seen() -> set:
@@ -24,6 +30,9 @@ def main() -> None:
     from pipeline.sheets import ensure_header, get_existing_links, append_row, get_sheet_url
     from pipeline.notifier import send_telegram
 
+    if MAX_JOBS_PER_REPO:
+        print(f"Fetching latest {MAX_JOBS_PER_REPO} jobs per repo (~{MAX_JOBS_PER_REPO * 4} total)")
+
     seen = load_seen()
 
     try:
@@ -38,7 +47,7 @@ def main() -> None:
     print(f"Skills: {skills_str}")
     print(f"Experiences loaded: {len(experiences)}")
 
-    new_jobs = fetch_new_jobs(seen)
+    new_jobs = fetch_new_jobs(seen, per_repo=MAX_JOBS_PER_REPO)
     if not new_jobs:
         print("No new jobs found. Done.")
         save_seen(seen)

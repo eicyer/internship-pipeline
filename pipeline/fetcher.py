@@ -147,7 +147,13 @@ def _parse_md_table(content: str, col_map: dict, slug: str) -> list[Job]:
     return jobs
 
 
-def fetch_new_jobs(seen_links: set) -> list[Job]:
+def fetch_new_jobs(seen_links: set, per_repo: int | None = None) -> list[Job]:
+    """
+    Fetch new jobs from all repos.
+    per_repo: if set, take only the first N rows per repo (newest-first).
+              Leave as None in production to get full delta.
+              Set to ~7 during testing to cap total at ~28 jobs.
+    """
     all_jobs = []
     for repo in REPOS:
         try:
@@ -156,8 +162,10 @@ def fetch_new_jobs(seen_links: set) -> list[Job]:
                 jobs = _parse_html_table(content, repo["col_map"], repo["slug"])
             else:
                 jobs = _parse_md_table(content, repo["col_map"], repo["slug"])
+            if per_repo is not None:
+                jobs = jobs[:per_repo]
             new = [j for j in jobs if j.apply_link not in seen_links]
-            print(f"{repo['slug']}: {len(jobs)} total, {len(new)} new")
+            print(f"{repo['slug']}: {len(jobs)} scanned, {len(new)} new")
             all_jobs.extend(new)
         except Exception as e:
             print(f"ERROR fetching {repo['slug']}: {e}")
