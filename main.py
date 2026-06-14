@@ -25,7 +25,8 @@ def save_seen(links: set) -> None:
 def main() -> None:
     from pipeline.fetcher import fetch_new_jobs
     from pipeline.resume_parser import parse_resume
-    from pipeline.stage1_filter import haiku_filter
+    from pipeline.stage1_filter import keyword_filter
+    from pipeline.requirements_fetcher import fetch_all_requirements
     from pipeline.stage2_analysis import sonnet_analyze
     from pipeline.sheets import ensure_header, get_existing_links, append_row, get_sheet_url
     from pipeline.notifier import send_telegram
@@ -53,17 +54,19 @@ def main() -> None:
         save_seen(seen)
         return
 
-    print(f"\n{len(new_jobs)} new jobs — running Stage 1 filter (Haiku)...")
-    passing = haiku_filter(new_jobs, skills_str)
+    passing = keyword_filter(new_jobs)
 
     if not passing:
         print("No matches after Stage 1.")
         save_seen(seen | {j.apply_link for j in new_jobs})
         return
 
+    print(f"\nFetching requirements for {len(passing)} jobs (parallel)...")
+    fetch_all_requirements(passing)
+
     ensure_header()
 
-    print(f"\n{len(passing)} matches — running Stage 2 analysis (Sonnet)...")
+    print(f"\nRunning Stage 2 analysis (Sonnet) on {len(passing)} jobs...")
     for job, grad_flag_hint in passing:
         print(f"  Analyzing: {job.company} — {job.role}")
         analysis = sonnet_analyze(job, skills_str, experiences, grad_flag_hint)

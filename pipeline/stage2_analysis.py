@@ -25,9 +25,10 @@ def _haiku_rank(job: Job, skills_str: str, experiences: list[dict], grad_flag_hi
         for i, e in enumerate(experiences)
     )
 
+    req_section = f"\nJob requirements:\n{job.requirements[:600]}" if job.requirements else ""
+
     prompt = f"""Candidate skills: {skills_str}
-Job: {job.role} at {job.company} | {job.location}
-Grad flag hint: {grad_flag_hint}
+Job: {job.role} at {job.company} | {job.location}{req_section}
 
 Rank these experiences by relevance to the job. Pick the top 3 indices.
 Also give an overall fit score (1-10), list matched candidate skills, and set grad_flag true only if the job requires 2028 graduation as a hard requirement.
@@ -61,10 +62,17 @@ def _sonnet_rewrite(job: Job, top_experiences: list[dict]) -> list[dict]:
         for e in top_experiences
     )
 
+    req_section = (
+        f"Job requirements:\n{job.requirements[:800]}"
+        if job.requirements
+        else f"No requirements page available — infer from role title: {job.role}"
+    )
+
     prompt = f"""Rewrite 2 bullets from each experience to match this job's language and keywords.
-Keep original metrics intact. Start with a strong action verb. Mirror the role's technical vocabulary.
+Keep original metrics intact. Start with a strong action verb. Mirror the role's exact technical vocabulary.
 
 Job: {job.role} at {job.company}
+{req_section}
 
 {exp_blocks}
 

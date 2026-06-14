@@ -1,69 +1,58 @@
-import json
-import os
-
-import anthropic
-
+import re
 from .fetcher import Job
 
-_client = None
+# Roles to block — non-software engineering types and non-technical roles.
+# Everything NOT matching these passes through (permissive by design).
+_REJECT = re.compile(
+    r"hardware engineer"
+    r"|electrical engineer"
+    r"|mechanical engineer"
+    r"|civil engineer"
+    r"|chemical engineer"
+    r"|biomedical engineer"
+    r"|aerospace engineer"
+    r"|aeronautical"
+    r"|structural engineer"
+    r"|manufacturing engineer"
+    r"|industrial engineer"
+    r"|materials engineer"
+    r"|process engineer"
+    r"|optical engineer"
+    r"|photonic"
+    r"|network engineer"
+    r"|sales(?: engineer| intern| associate| rep)"
+    r"|marketing intern"
+    r"|human resources"
+    r"|\bhr intern"
+    r"|supply chain"
+    r"|talent acquisition"
+    r"|recruiting intern"
+    r"|finance intern"
+    r"|financial analyst"
+    r"|business analyst"
+    r"|legal intern"
+    r"|graphic design"
+    r"|ux designer"
+    r"|ui/ux",
+    re.IGNORECASE,
+)
 
 
-def _get_client() -> anthropic.Anthropic:
-    global _client
-    if _client is None:
-        _client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    return _client
-
-
-def haiku_filter(jobs: list[Job], skills_str: str) -> list[tuple[Job, bool]]:
+def keyword_filter(jobs: list[Job]) -> list[tuple[Job, bool]]:
     """
-    Single Haiku call filtering all jobs. Returns (job, grad_flag) pairs
-    for jobs matching ≥1 candidate skill.
-    grad_flag=True means the posting explicitly requires Class of 2028 graduation only.
+    Pure Python keyword filter replacing the Stage 1 Haiku call.
+    Rejects non-software engineering and non-technical roles.
+    Accepts SWE, SDE, MLE, DE, DS, backend, frontend, fullstack, AI, and
+    anything else that doesn't match the reject list.
+    grad_flag is always False here — Stage 2a Haiku detects it per-job
+    using the actual requirements text.
     """
-    if not jobs:
-        return []
+    passing, rejected = [], 0
+    for job in jobs:
+        if _REJECT.search(job.role):
+            rejected += 1
+        else:
+            passing.append((job, False))
 
-    job_lines = "\n".join(
-        f"[{i}] {j.company} | {j.role} | {j.location}"
-        for i, j in enumerate(jobs)
-    )
-
-    prompt = f"""Candidate skills: {skills_str}
-
-Filter these internship listings. Return ONLY the IDs of jobs where:
-- The role could realistically require at least one of the candidate's skills, OR
-- The role title suggests technical work (software, data, ML, engineering, etc.)
-
-Also flag any job that explicitly states "Class of 2028", "graduating 2028", or "2028 only" as a graduation requirement.
-
-Jobs:
-{job_lines}
-
-Respond with JSON only, no explanation:
-{{"matches": [{{"id": 0, "grad_flag": false}}, ...]}}"""
-
-    response = _get_client().messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=1024,
-        messages=[{"role": "user", "content": prompt}],
-    )
-
-    text = response.content[0].text.strip()
-    # Strip markdown code fences if present
-    text = text.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError:
-        print(f"Stage 1 JSON parse error. Raw response:\n{text}")
-        return []
-
-    results = []
-    for match in data.get("matches", []):
-        idx = match.get("id")
-        if isinstance(idx, int) and 0 <= idx < len(jobs):
-            results.append((jobs[idx], bool(match.get("grad_flag", False))))
-
-    print(f"Stage 1: {len(jobs)} → {len(results)} matches")
-    return results
+    print(f"Stage 1 (keyword filter): {len(jobs)} → {len(passing)} passed, {rejected} rejected")
+    return passing

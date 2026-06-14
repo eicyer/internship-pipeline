@@ -3,7 +3,7 @@ import html
 import json
 import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import requests
 
@@ -39,6 +39,7 @@ class Job:
     apply_link: str
     notes: str = ""
     source_repo: str = ""
+    requirements: str = ""
 
 
 def _gh_headers() -> dict:
