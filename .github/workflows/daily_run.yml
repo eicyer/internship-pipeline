@@ -1,0 +1,41 @@
+name: Daily Internship Pipeline
+
+on:
+  schedule:
+    - cron: '0 14 * * *'   # 9 AM ET (UTC-5) / 10 AM ET (UTC-4 during DST)
+  workflow_dispatch:         # manual trigger for testing
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # needed to commit seen_jobs.json back to repo
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run pipeline
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_SHEETS_CREDS: ${{ secrets.GOOGLE_SHEETS_CREDS }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python main.py
+
+      - name: Save dedup state
+        if: always()   # commit even if pipeline partially failed
+        run: |
+          git config user.email "pipeline-bot@noreply.github.com"
+          git config user.name "Pipeline Bot"
+          git add data/seen_jobs.json
+          git diff --staged --quiet || git commit -m "chore: update seen jobs [skip ci]"
+          git push
