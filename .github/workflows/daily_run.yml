@@ -38,4 +38,5 @@ jobs:
           git config user.name "Pipeline Bot"
           git add data/seen_jobs.json
           git diff --staged --quiet || git commit -m "chore: update seen jobs [skip ci]"
+          git pull --rebase origin main
           git push

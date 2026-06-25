@@ -8,6 +8,10 @@ STATE_FILE = "data/seen_jobs.json"
 _max = os.getenv("MAX_JOBS_PER_REPO")
 MAX_JOBS_PER_REPO: int | None = int(_max) if _max else None
 
+# Only jobs scoring at or above this threshold advance to Sonnet rewriting.
+# Target: ~20 jobs/week. Raise to 8 if too many pass, lower to 6 if too few.
+FIT_SCORE_THRESHOLD = 7
+
 
 def load_seen() -> set:
     try:
@@ -27,7 +31,7 @@ def main() -> None:
     from pipeline.resume_parser import parse_resume
     from pipeline.stage1_filter import keyword_filter
     from pipeline.requirements_fetcher import fetch_all_requirements
-    from pipeline.stage2_analysis import sonnet_analyze
+    from pipeline.stage2_analysis import haiku_score, sonnet_rewrite
     from pipeline.sheets import ensure_header, get_existing_links, append_row, get_sheet_url
     from pipeline.notifier import send_telegram
 
@@ -54,6 +58,7 @@ def main() -> None:
         save_seen(seen)
         return
 
+    # Stage 1: whitelist filter (hardcoded Python, no API calls)
     passing = keyword_filter(new_jobs)
 
     if not passing:
@@ -66,16 +71,50 @@ def main() -> None:
 
     ensure_header()
 
-    print(f"\nRunning Stage 2 analysis (Sonnet) on {len(passing)} jobs...")
+    # Stage 2a: Haiku scores every Stage 1 passer (cheap)
+    print(f"\nStage 2a: Haiku scoring {len(passing)} jobs...")
+    scored = []
     for job, grad_flag_hint in passing:
-        print(f"  Analyzing: {job.company} — {job.role}")
-        analysis = sonnet_analyze(job, skills_str, experiences, grad_flag_hint)
+        print(f"  Scoring: {job.company} — {job.role}")
+        score = haiku_score(job, skills_str, experiences, grad_flag_hint)
+        scored.append((job, score))
+        print(f"    fit={score['fit_score']}/10  skills={score['skills_matched']}  grad_flag={score['grad_flag']}")
+
+    # Gate: only high-fit, non-grad-flagged jobs advance to Sonnet
+    above_threshold = [
+        (job, score) for job, score in scored
+        if score["fit_score"] >= FIT_SCORE_THRESHOLD and not score["grad_flag"]
+    ]
+    below_threshold = [
+        (job, score) for job, score in scored
+        if score["fit_score"] < FIT_SCORE_THRESHOLD or score["grad_flag"]
+    ]
+
+    print(
+        f"\nStage 2 gate (fit ≥ {FIT_SCORE_THRESHOLD}, no grad flag): "
+        f"{len(scored)} scored → {len(above_threshold)} advance, {len(below_threshold)} dropped"
+    )
+    for job, score in below_threshold:
+        reason = "grad flag" if score["grad_flag"] else f"fit={score['fit_score']}"
+        print(f"  Dropped ({reason}): {job.company} — {job.role}")
+
+    if not above_threshold:
+        print("No jobs cleared the threshold. Done.")
+        save_seen(seen | {j.apply_link for j in new_jobs})
+        return
+
+    # Stage 2b: Sonnet selects top 3 experiences and rewrites bullets (only for threshold jobs)
+    print(f"\nStage 2b: Sonnet rewriting {len(above_threshold)} jobs...")
+    for job, score in above_threshold:
+        print(f"  Rewriting: {job.company} — {job.role} (fit={score['fit_score']})")
+        rewrite = sonnet_rewrite(job, experiences)
+        analysis = {**score, **rewrite}
         row_num = append_row(job, analysis)
         sheet_url = get_sheet_url(row_num)
         send_telegram(job, analysis, sheet_url)
 
     save_seen(seen | {j.apply_link for j in new_jobs})
-    print(f"\nDone. {len(passing)} job(s) logged and notified.")
+    print(f"\nDone. {len(above_threshold)} job(s) rewritten, logged, and notified.")
 
 
 if __name__ == "__main__":

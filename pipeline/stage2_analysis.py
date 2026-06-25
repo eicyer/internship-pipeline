@@ -15,10 +15,11 @@ def _get_client() -> anthropic.Anthropic:
     return _client
 
 
-def _haiku_rank(job: Job, skills_str: str, experiences: list[dict], grad_flag_hint: bool) -> dict:
+def haiku_score(job: Job, skills_str: str, experiences: list[dict], grad_flag_hint: bool) -> dict:
     """
-    Haiku call: uses only experience skill buzzwords (not full bullets) to rank
-    experiences and compute fit score. Extremely cheap — ~250 tokens in, ~80 out.
+    Haiku call: scores job fit and detects graduation year requirements.
+    Uses only experience skill buzzwords (not full bullets) — cheap (~250 tokens in, ~80 out).
+    Returns: {fit_score, skills_matched, grad_flag, top_indices}
     """
     exp_lines = "\n".join(
         f"[{i}] {e['company']} | {e['role']} | {', '.join(e.get('skills', []))}"
@@ -50,16 +51,16 @@ JSON only:
         return {"fit_score": 0, "skills_matched": [], "grad_flag": grad_flag_hint, "top_indices": [0, 1, 2]}
 
 
-def _sonnet_rewrite(job: Job, top_experiences: list[dict]) -> list[dict]:
+def sonnet_rewrite(job: Job, experiences: list[dict]) -> dict:
     """
-    Sonnet call: receives ONLY the top 3 experiences with their actual bullets.
-    Sole task is rewriting — no ranking, no scoring, nothing else.
-    ~450 tokens in, ~200 out.
+    Sonnet call: selects the 3 most relevant experiences from the full list,
+    then rewrites 2 bullets per experience to match the job's language and keywords.
+    Returns: {"ranked_experiences": [...]} matching the shape expected by sheets/notifier.
     """
     exp_blocks = "\n\n".join(
-        f"[{e['company']} | {e['role']}]\n"
+        f"[{i}] {e['company']} | {e['role']}\n"
         + "\n".join(f"- {b}" for b in e.get("bullets", []))
-        for e in top_experiences
+        for i, e in enumerate(experiences)
     )
 
     req_section = (
@@ -68,56 +69,40 @@ def _sonnet_rewrite(job: Job, top_experiences: list[dict]) -> list[dict]:
         else f"No requirements page available — infer from role title: {job.role}"
     )
 
-    prompt = f"""Rewrite 2 bullets from each experience to match this job's language and keywords.
-Keep original metrics intact. Start with a strong action verb. Mirror the role's exact technical vocabulary.
+    prompt = f"""You are tailoring a resume for a job application.
 
 Job: {job.role} at {job.company}
 {req_section}
 
+From the {len(experiences)} candidate experiences below, select the 3 most relevant to this specific role
+and rewrite exactly 2 bullet points per experience to match the job's language and keywords.
+Keep all original metrics intact. Start each bullet with a strong action verb.
+Mirror the role's exact technical vocabulary.
+
 {exp_blocks}
 
-JSON only — array ordered same as input:
-[{{"company": "...", "role": "...", "optimized_bullets": ["rewritten 1", "rewritten 2"]}}]"""
+Return JSON array of exactly 3 objects ordered by relevance (most relevant first):
+[{{"index": 0, "company": "...", "role": "...", "optimized_bullets": ["rewritten 1", "rewritten 2"]}}]"""
 
     resp = _get_client().messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=400,
+        max_tokens=600,
         messages=[{"role": "user", "content": prompt}],
     )
     text = resp.content[0].text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
     try:
-        return json.loads(text)
+        rewritten = json.loads(text)
     except json.JSONDecodeError:
-        return [{"company": e["company"], "role": e["role"], "optimized_bullets": []} for e in top_experiences]
+        rewritten = [
+            {"index": i, "company": experiences[i]["company"], "role": experiences[i]["role"], "optimized_bullets": []}
+            for i in range(min(3, len(experiences)))
+        ]
 
-
-def sonnet_analyze(job: Job, skills_str: str, experiences: list[dict], grad_flag_hint: bool) -> dict:
-    """
-    Two-sub-call pipeline:
-      1. Haiku: buzzword ranking → fit_score, skills_matched, grad_flag, top 3 indices
-      2. Sonnet: rewrite bullets for top 3 experiences only
-
-    Returns the same shape as before so sheets/notifier need no changes.
-    """
-    ranking = _haiku_rank(job, skills_str, experiences, grad_flag_hint)
-
-    top_indices = ranking.get("top_indices", [0, 1, 2])[:3]
-    top_experiences = [experiences[i] for i in top_indices if i < len(experiences)]
-
-    rewritten = _sonnet_rewrite(job, top_experiences)
-
-    # Build ranked_experiences: top 3 with rewritten bullets, rest appended without
-    seen = set(top_indices)
-    ranked_experiences = []
-    for i, entry in enumerate(rewritten):
-        ranked_experiences.append({
-            "index": top_indices[i] if i < len(top_indices) else -1,
-            "company": entry.get("company", ""),
-            "role": entry.get("role", ""),
-            "optimized_bullets": entry.get("optimized_bullets", []),
-        })
+    # Append remaining experiences (no bullets) so sheets/notifier have the full list
+    seen_indices = {entry.get("index", -1) for entry in rewritten}
+    ranked_experiences = list(rewritten)
     for i, exp in enumerate(experiences):
-        if i not in seen:
+        if i not in seen_indices:
             ranked_experiences.append({
                 "index": i,
                 "company": exp["company"],
@@ -125,9 +110,4 @@ def sonnet_analyze(job: Job, skills_str: str, experiences: list[dict], grad_flag
                 "optimized_bullets": [],
             })
 
-    return {
-        "fit_score": ranking.get("fit_score", 0),
-        "skills_matched": ranking.get("skills_matched", []),
-        "grad_flag": ranking.get("grad_flag", grad_flag_hint),
-        "ranked_experiences": ranked_experiences,
-    }
+    return {"ranked_experiences": ranked_experiences}

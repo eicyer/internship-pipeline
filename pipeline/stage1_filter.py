@@ -1,58 +1,49 @@
 import re
 from .fetcher import Job
 
-# Roles to block — non-software engineering types and non-technical roles.
-# Everything NOT matching these passes through (permissive by design).
-_REJECT = re.compile(
-    r"hardware engineer"
-    r"|electrical engineer"
-    r"|mechanical engineer"
-    r"|civil engineer"
-    r"|chemical engineer"
-    r"|biomedical engineer"
-    r"|aerospace engineer"
-    r"|aeronautical"
-    r"|structural engineer"
-    r"|manufacturing engineer"
-    r"|industrial engineer"
-    r"|materials engineer"
-    r"|process engineer"
-    r"|optical engineer"
-    r"|photonic"
-    r"|network engineer"
-    r"|sales(?: engineer| intern| associate| rep)"
-    r"|marketing intern"
-    r"|human resources"
-    r"|\bhr intern"
-    r"|supply chain"
-    r"|talent acquisition"
-    r"|recruiting intern"
-    r"|finance intern"
-    r"|financial analyst"
-    r"|business analyst"
-    r"|legal intern"
-    r"|graphic design"
-    r"|ux designer"
-    r"|ui/ux",
+# Strict whitelist: only the specific SWE/data/ML roles we care about pass.
+# Everything NOT matching these is rejected.
+_ACCEPT = re.compile(
+    r"software engineer"
+    r"|software developer"
+    r"|software development engineer"
+    r"|\bswe\b"
+    r"|\bsde\b"
+    r"|backend engineer"
+    r"|backend developer"
+    r"|back-end engineer"
+    r"|back-end developer"
+    r"|frontend engineer"
+    r"|frontend developer"
+    r"|front-end engineer"
+    r"|front-end developer"
+    r"|full.?stack engineer"
+    r"|full.?stack developer"
+    r"|data scientist"
+    r"|machine learning engineer"
+    r"|\bml engineer"
+    r"|\bmle\b"
+    r"|forward deployed engineer"
+    r"|applied scientist"
+    r"|\bai engineer"
+    r"|ai/ml engineer"
+    r"|ai ml engineer",
     re.IGNORECASE,
 )
 
 
 def keyword_filter(jobs: list[Job]) -> list[tuple[Job, bool]]:
     """
-    Pure Python keyword filter replacing the Stage 1 Haiku call.
-    Rejects non-software engineering and non-technical roles.
-    Accepts SWE, SDE, MLE, DE, DS, backend, frontend, fullstack, AI, and
-    anything else that doesn't match the reject list.
-    grad_flag is always False here — Stage 2a Haiku detects it per-job
-    using the actual requirements text.
+    Strict whitelist: only roles explicitly matching SWE/SDE/MLE/DS/FDE variants pass.
+    Rejects anything not in the whitelist (generic "Engineering Intern", PM, DevOps, etc.).
+    grad_flag is always False here — Stage 2a Haiku detects it per-job.
     """
     passing, rejected = [], 0
     for job in jobs:
-        if _REJECT.search(job.role):
-            rejected += 1
-        else:
+        if _ACCEPT.search(job.role):
             passing.append((job, False))
+        else:
+            rejected += 1
 
-    print(f"Stage 1 (keyword filter): {len(jobs)} → {len(passing)} passed, {rejected} rejected")
+    print(f"Stage 1 (whitelist filter): {len(jobs)} → {len(passing)} passed, {rejected} rejected")
     return passing
