@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 import anthropic
 
@@ -41,10 +42,12 @@ JSON only:
 
     resp = _get_client().messages.create(
         model="claude-haiku-4-5-20251001",
-        max_tokens=120,
+        max_tokens=200,
         messages=[{"role": "user", "content": prompt}],
     )
-    text = resp.content[0].text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+    raw = resp.content[0].text
+    match = re.search(r"\{.*\}", raw, re.DOTALL)
+    text = match.group() if match else raw.strip()
     try:
         return json.loads(text)
     except json.JSONDecodeError:
@@ -90,7 +93,9 @@ Return JSON array of exactly 3 objects ordered by relevance (most relevant first
         max_tokens=900,
         messages=[{"role": "user", "content": prompt}],
     )
-    text = resp.content[0].text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+    raw = resp.content[0].text
+    match = re.search(r"\[.*\]", raw, re.DOTALL)
+    text = match.group() if match else raw.strip()
     try:
         rewritten = json.loads(text)
     except json.JSONDecodeError:

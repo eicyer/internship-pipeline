@@ -131,11 +131,11 @@ class TestIssue3JsonTruncation:
         assert result["top_indices"] == [0, 1, 2]
 
     @pytest.mark.mock
-    def test_verbose_preamble_breaks_json_parse(self):
+    def test_verbose_preamble_is_stripped_correctly(self):
         """
-        If Haiku adds a short sentence before the JSON (e.g. 'Here is my answer:'),
-        the removeprefix() stripping only handles ```-fences, not prose.
-        The result is a JSONDecodeError → fit_score=0.
+        Regression: before the fix, prose before the JSON caused JSONDecodeError → fit_score=0.
+        The regex extraction (re.search for the outermost {...}) now recovers the JSON
+        correctly regardless of any leading text.
         """
         with_preamble = 'Here is the JSON:\n{"fit_score": 8, "skills_matched": ["Python"], "grad_flag": false, "top_indices": [0, 1, 2]}'
 
@@ -151,10 +151,10 @@ class TestIssue3JsonTruncation:
             mock_client.return_value.messages.create.return_value = _make_response(with_preamble)
             result = haiku_score(job, SKILLS_STR, EXPERIENCES, grad_flag_hint=False)
 
-        assert result["fit_score"] == 0, (
-            "Prose preamble before JSON is not stripped — JSONDecodeError fires "
-            "and the job is dropped with fit_score=0."
+        assert result["fit_score"] == 8, (
+            "Regex extraction should recover the JSON object from a prose-prefixed response."
         )
+        assert "Python" in result["skills_matched"]
 
     @pytest.mark.mock
     def test_clean_json_parses_correctly(self):
