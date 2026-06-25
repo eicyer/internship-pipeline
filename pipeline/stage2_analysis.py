@@ -75,18 +75,19 @@ Job: {job.role} at {job.company}
 {req_section}
 
 From the {len(experiences)} candidate experiences below, select the 3 most relevant to this specific role
-and rewrite exactly 2 bullet points per experience to match the job's language and keywords.
+and rewrite exactly 3 bullet points per experience to match the job's language and keywords.
 Keep all original metrics intact. Start each bullet with a strong action verb.
 Mirror the role's exact technical vocabulary.
+Each rewritten bullet must be the same character length as the original bullet it replaces (±2 chars).
 
 {exp_blocks}
 
 Return JSON array of exactly 3 objects ordered by relevance (most relevant first):
-[{{"index": 0, "company": "...", "role": "...", "optimized_bullets": ["rewritten 1", "rewritten 2"]}}]"""
+[{{"index": 0, "company": "...", "role": "...", "optimized_bullets": ["rewritten 1", "rewritten 2", "rewritten 3"]}}]"""
 
     resp = _get_client().messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=600,
+        max_tokens=900,
         messages=[{"role": "user", "content": prompt}],
     )
     text = resp.content[0].text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
