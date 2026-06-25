@@ -27,7 +27,9 @@ _ACCEPT = re.compile(
     r"|applied scientist"
     r"|\bai engineer"
     r"|ai/ml engineer"
-    r"|ai ml engineer",
+    r"|ai ml engineer"
+    r"|^\s*intern\s*$"
+    r"|^\s*software intern\s*$",
     re.IGNORECASE,
 )
 
