@@ -20,4 +20,4 @@ jobs:
       - name: Run haiku scoring tests
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: pytest tests/test_haiku_scoring.py -v -s
+        run: python -m pytest tests/test_haiku_scoring.py -v -s
