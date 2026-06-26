@@ -8,6 +8,28 @@ from .fetcher import Job
 
 _client = None
 
+# Liberal title-based fallback for jobs where requirements fetching failed.
+# Anything that looks like an engineering/SWE/ML/intern role auto-passes at fit=7.
+# False positives are harmless — Stage 1 already did the strict whitelist pass.
+_NO_REQS_ACCEPT = re.compile(
+    r"software engineer"
+    r"|software developer"
+    r"|\bswe\b"
+    r"|\bsde\b"
+    r"|\bengineer\b"
+    r"|\bintern\b"
+    r"|backend"
+    r"|frontend|front.end"
+    r"|full.?stack"
+    r"|data scientist"
+    r"|machine learning"
+    r"|\bmle\b"
+    r"|forward deployed"
+    r"|applied scientist"
+    r"|\bai\b",
+    re.IGNORECASE,
+)
+
 
 def _get_client() -> anthropic.Anthropic:
     global _client
@@ -27,7 +49,16 @@ def haiku_score(job: Job, skills_str: str, experiences: list[dict], grad_flag_hi
         for i, e in enumerate(experiences)
     )
 
-    req_section = f"\nJob requirements:\n{job.requirements[:600]}" if job.requirements else ""
+    if not job.requirements:
+        passes = bool(_NO_REQS_ACCEPT.search(job.role))
+        return {
+            "fit_score": 7 if passes else 0,
+            "skills_matched": [],
+            "grad_flag": grad_flag_hint,
+            "top_indices": [0, 1, 2],
+        }
+
+    req_section = f"\nJob requirements:\n{job.requirements[:600]}"
 
     prompt = f"""Candidate skills: {skills_str}
 Job: {job.role} at {job.company} | {job.location}{req_section}

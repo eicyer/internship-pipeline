@@ -232,21 +232,12 @@ class TestIssue2RequirementsTruncation:
             f"skills={score_full['skills_matched']}"
         )
 
-        # The gap is what we're diagnosing.  A gap ≥ 2 means #2 is responsible
-        # for a false positive here.
+        # Diagnostic only — API run showed gap=0 for this job shape.
+        # Issue #2 is not confirmed: Haiku scores the same whether or not C++/FPGA
+        # requirements are visible, because the marketing intro already provides
+        # enough Python/ML signal to anchor the score.
         gap = score_truncated["fit_score"] - score_full["fit_score"]
         print(f"  Score inflation from truncation: +{gap}")
-
-        # If this assertion fails, #2 is NOT contributing — the truncated score
-        # is already low and the issue is benign for this job shape.
-        assert score_truncated["fit_score"] >= 6, (
-            "Truncated job scored below 6 — no false positive detected for this input. "
-            "Try a more deceptive intro."
-        )
-        assert score_full["fit_score"] < score_truncated["fit_score"], (
-            "Full requirements did not lower the score — truncation may not be inflating "
-            "scores for this job shape.  Gap: {gap}"
-        )
 
     @pytest.mark.api
     def test_false_negative_good_requirements_after_cutoff(self):
@@ -289,11 +280,9 @@ class TestIssue2RequirementsTruncation:
             f"  Score suppression from truncation: -{score_full['fit_score'] - score_truncated['fit_score']}"
         )
 
-        assert score_full["fit_score"] > score_truncated["fit_score"], (
-            "Full requirements did not raise the score — the good requirements "
-            "after 600 chars are not being missed.  Truncation may not be a "
-            "false-negative source for this job shape."
-        )
+        # Diagnostic only — API run showed gap=0 for this job shape.
+        # Issue #2 is not confirmed: the marketing intro's Python mentions give
+        # Haiku enough signal to score 8 regardless of what follows the cutoff.
 
 
 # ===========================================================================
