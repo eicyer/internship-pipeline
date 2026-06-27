@@ -11,6 +11,10 @@ HEADER = [
     "Skills Match", "Fit Score", "Grad Flag", "Bullet Suggestions", "Status",
 ]
 
+_STATUS_OPTIONS = ["To Apply", "Applied", "Interview / OA", "Offer", "Rejected"]
+
+_COLUMN_WIDTHS = [90, 130, 210, 120, 280, 180, 75, 80, 360, 100]
+
 _service = None
 
 
@@ -28,6 +32,176 @@ def _sheet_id() -> str:
     return os.environ["GOOGLE_SHEET_ID"]
 
 
+def format_sheet() -> None:
+    """Apply one-time visual formatting: frozen header, colors, column widths, conditional rules."""
+    svc = _get_service()
+    sid = _sheet_id()
+
+    # Resolve the numeric gid for Sheet1
+    meta = svc.spreadsheets().get(spreadsheetId=sid).execute()
+    gid = meta["sheets"][0]["properties"]["sheetId"]
+
+    def _color(r, g, b):
+        return {"red": r / 255, "green": g / 255, "blue": b / 255}
+
+    requests = []
+
+    # Freeze header row
+    requests.append({
+        "updateSheetProperties": {
+            "properties": {
+                "sheetId": gid,
+                "gridProperties": {"frozenRowCount": 1},
+            },
+            "fields": "gridProperties.frozenRowCount",
+        }
+    })
+
+    # Header row: dark navy background, white bold text, center-aligned
+    requests.append({
+        "repeatCell": {
+            "range": {"sheetId": gid, "startRowIndex": 0, "endRowIndex": 1},
+            "cell": {
+                "userEnteredFormat": {
+                    "backgroundColor": _color(30, 41, 59),
+                    "textFormat": {
+                        "bold": True,
+                        "foregroundColor": _color(248, 250, 252),
+                        "fontSize": 10,
+                    },
+                    "horizontalAlignment": "CENTER",
+                    "verticalAlignment": "MIDDLE",
+                    "wrapStrategy": "CLIP",
+                }
+            },
+            "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment,wrapStrategy)",
+        }
+    })
+
+    # Default data rows: wrap Bullet Suggestions (col I = index 8), clip everything else
+    requests.append({
+        "repeatCell": {
+            "range": {"sheetId": gid, "startRowIndex": 1, "startColumnIndex": 0, "endColumnIndex": 10},
+            "cell": {
+                "userEnteredFormat": {
+                    "verticalAlignment": "TOP",
+                    "wrapStrategy": "CLIP",
+                }
+            },
+            "fields": "userEnteredFormat(verticalAlignment,wrapStrategy)",
+        }
+    })
+    requests.append({
+        "repeatCell": {
+            "range": {"sheetId": gid, "startRowIndex": 1, "startColumnIndex": 8, "endColumnIndex": 9},
+            "cell": {
+                "userEnteredFormat": {"wrapStrategy": "WRAP"},
+            },
+            "fields": "userEnteredFormat(wrapStrategy)",
+        }
+    })
+
+    # Column widths
+    for i, px in enumerate(_COLUMN_WIDTHS):
+        requests.append({
+            "updateDimensionProperties": {
+                "range": {
+                    "sheetId": gid,
+                    "dimension": "COLUMNS",
+                    "startIndex": i,
+                    "endIndex": i + 1,
+                },
+                "properties": {"pixelSize": px},
+                "fields": "pixelSize",
+            }
+        })
+
+    # Filter dropdowns on header
+    requests.append({
+        "setBasicFilter": {
+            "filter": {
+                "range": {
+                    "sheetId": gid,
+                    "startRowIndex": 0,
+                    "endRowIndex": 1,
+                    "startColumnIndex": 0,
+                    "endColumnIndex": 10,
+                }
+            }
+        }
+    })
+
+    # Data validation: Status column (J = index 9)
+    requests.append({
+        "setDataValidation": {
+            "range": {
+                "sheetId": gid,
+                "startRowIndex": 1,
+                "startColumnIndex": 9,
+                "endColumnIndex": 10,
+            },
+            "rule": {
+                "condition": {
+                    "type": "ONE_OF_LIST",
+                    "values": [{"userEnteredValue": v} for v in _STATUS_OPTIONS],
+                },
+                "showCustomUi": True,
+                "strict": False,
+            },
+        }
+    })
+
+    # Conditional formatting: Fit Score (G = col index 6)
+    score_range = {"sheetId": gid, "startRowIndex": 1, "startColumnIndex": 6, "endColumnIndex": 7}
+    score_rules = [
+        # red: < 7
+        ("NUMBER_LESS_THAN", "7", _color(242, 184, 181)),
+        # yellow: = 7
+        ("NUMBER_EQ", "7", _color(255, 229, 153)),
+        # light green: = 8
+        ("NUMBER_EQ", "8", _color(183, 225, 205)),
+        # green: >= 9
+        ("NUMBER_GREATER_THAN_EQ", "9", _color(87, 187, 138)),
+    ]
+    for i, (ctype, val, bg) in enumerate(score_rules):
+        requests.append({
+            "addConditionalFormatRule": {
+                "rule": {
+                    "ranges": [score_range],
+                    "booleanRule": {
+                        "condition": {
+                            "type": ctype,
+                            "values": [{"userEnteredValue": val}],
+                        },
+                        "format": {"backgroundColor": bg},
+                    },
+                },
+                "index": i,
+            }
+        })
+
+    # Conditional formatting: Grad Flag YES (H = col index 7) → red
+    requests.append({
+        "addConditionalFormatRule": {
+            "rule": {
+                "ranges": [{"sheetId": gid, "startRowIndex": 1, "startColumnIndex": 7, "endColumnIndex": 8}],
+                "booleanRule": {
+                    "condition": {
+                        "type": "TEXT_EQ",
+                        "values": [{"userEnteredValue": "YES"}],
+                    },
+                    "format": {"backgroundColor": _color(242, 184, 181)},
+                },
+            },
+            "index": 4,
+        }
+    })
+
+    svc.spreadsheets().batchUpdate(
+        spreadsheetId=sid, body={"requests": requests}
+    ).execute()
+
+
 def ensure_header():
     svc = _get_service()
     result = svc.spreadsheets().values().get(
@@ -40,6 +214,7 @@ def ensure_header():
             valueInputOption="RAW",
             body={"values": [HEADER]},
         ).execute()
+        format_sheet()
 
 
 def get_existing_links() -> set:
@@ -52,14 +227,15 @@ def get_existing_links() -> set:
 
 
 def _format_bullets_for_sheet(analysis: dict) -> str:
-    """Format top 3 ranked experiences with their optimized bullets for the sheet cell."""
     ranked = analysis.get("ranked_experiences", [])
     parts = []
+    exp_num = 0
     for exp in ranked:
         bullets = exp.get("optimized_bullets", [])
         if not bullets:
             continue
-        parts.append(f"[{exp['company']} → #{len(parts)+1}]")
+        exp_num += 1
+        parts.append(f"[{exp['company']} → #{exp_num}]")
         for b in bullets:
             parts.append(f"• {b}")
     return "\n".join(parts)
@@ -91,7 +267,6 @@ def append_row(job, analysis: dict) -> int:
         body={"values": [row]},
     ).execute()
     updated_range = result.get("updates", {}).get("updatedRange", "")
-    # Parse row number from range like "Sheet1!A5:J5"
     try:
         row_num = int(updated_range.split("!")[1].split(":")[0][1:])
     except (IndexError, ValueError):
