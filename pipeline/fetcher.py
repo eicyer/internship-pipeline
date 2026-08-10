@@ -31,6 +31,23 @@ REPOS = [
 ]
 
 
+_ROLE_NOISE_RE = re.compile(
+    r"\((?:summer|fall|spring|winter)?\s*20\d\d\)|"
+    r"-\s*(?:summer|fall|spring|winter)\s*20\d\d|"
+    r"\b20\d\d\b"
+)
+
+
+def normalize_key(company: str, role: str) -> str:
+    """Company+role identity key used for cross-repo/cross-run dedup, independent of apply_link."""
+    def clean(text: str) -> str:
+        text = text.lower()
+        text = _ROLE_NOISE_RE.sub("", text)
+        text = re.sub(r"[^a-z0-9]+", " ", text)
+        return " ".join(text.split())
+    return f"{clean(company)}|{clean(role)}"
+
+
 @dataclass
 class Job:
     company: str
@@ -40,6 +57,10 @@ class Job:
     notes: str = ""
     source_repo: str = ""
     requirements: str = ""
+
+    @property
+    def dedup_key(self) -> str:
+        return normalize_key(self.company, self.role)
 
 
 def _gh_headers() -> dict:
@@ -148,14 +169,21 @@ def _parse_md_table(content: str, col_map: dict, slug: str) -> list[Job]:
     return jobs
 
 
-def fetch_new_jobs(seen_links: set, per_repo: int | None = None) -> list[Job]:
+def fetch_new_jobs(seen_links: set, seen_keys: set | None = None, per_repo: int | None = None) -> list[Job]:
     """
     Fetch new jobs from all repos.
     per_repo: if set, take only the first N rows per repo (newest-first).
               Leave as None in production to get full delta.
               Set to ~7 during testing to cap total at ~28 jobs.
+
+    Dedup happens in two layers:
+    1. against historical seen_links / seen_keys (jobs logged in prior runs)
+    2. across repos within this run, since multiple repos frequently list the
+       same posting under different apply_link URLs (referral vs. direct link)
     """
+    seen_keys = seen_keys or set()
     all_jobs = []
+    run_keys_seen = set()
     for repo in REPOS:
         try:
             content = _fetch_readme(repo["slug"])
@@ -165,9 +193,16 @@ def fetch_new_jobs(seen_links: set, per_repo: int | None = None) -> list[Job]:
                 jobs = _parse_md_table(content, repo["col_map"], repo["slug"])
             if per_repo is not None:
                 jobs = jobs[:per_repo]
-            new = [j for j in jobs if j.apply_link not in seen_links]
+            new = [
+                j for j in jobs
+                if j.apply_link not in seen_links and j.dedup_key not in seen_keys
+            ]
             print(f"{repo['slug']}: {len(jobs)} scanned, {len(new)} new")
-            all_jobs.extend(new)
+            for j in new:
+                if j.dedup_key in run_keys_seen:
+                    continue
+                run_keys_seen.add(j.dedup_key)
+                all_jobs.append(j)
         except Exception as e:
             print(f"ERROR fetching {repo['slug']}: {e}")
     return all_jobs

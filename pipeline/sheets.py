@@ -226,6 +226,22 @@ def get_existing_links() -> set:
     return {row[0] for row in rows[1:] if row}  # skip header
 
 
+def get_existing_keys() -> set:
+    """Normalized company|role identity keys for every row already logged, for cross-link dedup."""
+    from pipeline.fetcher import normalize_key
+
+    svc = _get_service()
+    result = svc.spreadsheets().values().get(
+        spreadsheetId=_sheet_id(), range="Sheet1!B:C"
+    ).execute()
+    rows = result.get("values", [])
+    keys = set()
+    for row in rows[1:]:  # skip header
+        if len(row) >= 2:
+            keys.add(normalize_key(row[0], row[1]))
+    return keys
+
+
 def _format_bullets_for_sheet(analysis: dict) -> str:
     ranked = analysis.get("ranked_experiences", [])
     parts = []

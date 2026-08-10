@@ -38,11 +38,16 @@ Target volume: ~20 jobs/week reach Sonnet rewriting.
 
 ## Deduplication
 
-Two-layer dedup to avoid reprocessing jobs across daily runs:
-1. `data/seen_jobs.json` — persisted to the repo after every run (committed by GitHub Actions with `[skip ci]` to avoid triggering the workflow again)
-2. Google Sheets existing links — pulled at startup and merged into `seen`
+Jobs are deduped on two independent signals, since the same posting is often listed by multiple source repos under different apply URLs (referral link vs. direct company link):
+1. **`apply_link`** — exact URL match.
+2. **`dedup_key`** (`pipeline/fetcher.py::normalize_key`) — normalized `company|role`, so the same company+title combo can't re-enter even via a different link. Same company with a *different* title, or a different company with the *same* title, are not considered duplicates.
 
-If the `seen_jobs.json` push ever fails, the Sheets dedup acts as the safety net.
+Both signals are checked at three layers:
+1. Within a single run, across the 4 source repos (`fetch_new_jobs` in `pipeline/fetcher.py`).
+2. `data/seen_jobs.json` — `{"links": [...], "keys": [...]}`, persisted to the repo after every run (committed by GitHub Actions with `[skip ci]` to avoid triggering the workflow again). The old flat-list-of-links format is still read transparently for backward compatibility.
+3. Google Sheets — existing links (col E) and existing company/role pairs (cols B/C, normalized) are pulled at startup and merged in.
+
+If the `seen_jobs.json` push ever fails, the Sheets-based dedup acts as the safety net.
 
 ## Stage 1 whitelist
 
