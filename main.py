@@ -17,17 +17,22 @@ MAX_JOBS_PER_REPO: int | None = int(_max) if _max else None
 FIT_SCORE_THRESHOLD = 7
 
 
-def load_seen() -> set:
+def load_seen() -> tuple[set, set]:
+    """Returns (seen_links, seen_keys). Handles the legacy flat-list-of-links format."""
     try:
         with open(STATE_FILE) as f:
-            return set(json.load(f))
+            data = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
-        return set()
+        return set(), set()
+
+    if isinstance(data, list):  # legacy format: flat list of links
+        return set(data), set()
+    return set(data.get("links", [])), set(data.get("keys", []))
 
 
-def save_seen(links: set) -> None:
+def save_seen(links: set, keys: set) -> None:
     with open(STATE_FILE, "w") as f:
-        json.dump(sorted(links), f, indent=2)
+        json.dump({"links": sorted(links), "keys": sorted(keys)}, f, indent=2)
 
 
 def main() -> None:
@@ -36,29 +41,29 @@ def main() -> None:
     from pipeline.stage1_filter import keyword_filter
     from pipeline.requirements_fetcher import fetch_all_requirements
     from pipeline.stage2_analysis import haiku_score, sonnet_rewrite
-    from pipeline.sheets import ensure_header, get_existing_links, append_row, get_sheet_url
+    from pipeline.sheets import ensure_header, get_existing_links, get_existing_keys, append_row, get_sheet_url
     from pipeline.notifier import send_telegram, send_run_summary
 
     if MAX_JOBS_PER_REPO:
         log.info(f"Dev mode: capping each repo to {MAX_JOBS_PER_REPO} rows (~{MAX_JOBS_PER_REPO * 4} total)")
 
-    seen = load_seen()
+    seen_links, seen_keys = load_seen()
 
     try:
-        sheet_links = get_existing_links()
-        seen |= sheet_links
+        seen_links |= get_existing_links()
+        seen_keys |= get_existing_keys()
     except Exception as e:
-        log.warning(f"Could not fetch existing sheet links (continuing): {e}")
+        log.warning(f"Could not fetch existing sheet links/keys (continuing): {e}")
 
-    log.info(f"Loaded {len(seen)} already-seen job links")
+    log.info(f"Loaded {len(seen_links)} already-seen job links, {len(seen_keys)} known company/role keys")
 
     skills_str, experiences = parse_resume()
     log.info(f"Resume: {len(experiences)} experiences | skills: {skills_str}")
 
-    new_jobs = fetch_new_jobs(seen, per_repo=MAX_JOBS_PER_REPO)
+    new_jobs = fetch_new_jobs(seen_links, seen_keys, per_repo=MAX_JOBS_PER_REPO)
     if not new_jobs:
         log.info("No new jobs found. Done.")
-        save_seen(seen)
+        save_seen(seen_links, seen_keys)
         send_run_summary({"new_jobs": 0, "stage1": 0, "scored": 0, "above_threshold": 0, "logged": 0})
         return
 
@@ -78,7 +83,7 @@ def main() -> None:
 
     if not passing:
         log.info("No matches after Stage 1.")
-        save_seen(seen | {j.apply_link for j in new_jobs})
+        save_seen(seen_links | {j.apply_link for j in new_jobs}, seen_keys | {j.dedup_key for j in new_jobs})
         send_run_summary(stats)
         return
 
@@ -129,7 +134,7 @@ def main() -> None:
 
     if not above_threshold:
         log.info("No jobs cleared the threshold. Done.")
-        save_seen(seen | {j.apply_link for j in new_jobs})
+        save_seen(seen_links | {j.apply_link for j in new_jobs}, seen_keys | {j.dedup_key for j in new_jobs})
         send_run_summary(stats)
         return
 
@@ -144,7 +149,7 @@ def main() -> None:
         send_telegram(job, analysis, sheet_url)
         stats["logged"] += 1
 
-    save_seen(seen | {j.apply_link for j in new_jobs})
+    save_seen(seen_links | {j.apply_link for j in new_jobs}, seen_keys | {j.dedup_key for j in new_jobs})
     log.info(f"Done. {stats['logged']} job(s) rewritten, logged, and notified.")
     send_run_summary(stats)
 
