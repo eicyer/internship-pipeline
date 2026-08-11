@@ -1,37 +1,5 @@
-import re
 from .fetcher import Job
-
-# Strict whitelist: only the specific SWE/data/ML roles we care about pass.
-# Everything NOT matching these is rejected.
-_ACCEPT = re.compile(
-    r"software engineer"
-    r"|software developer"
-    r"|software development engineer"
-    r"|\bswe\b"
-    r"|\bsde\b"
-    r"|backend engineer"
-    r"|backend developer"
-    r"|back-end engineer"
-    r"|back-end developer"
-    r"|frontend engineer"
-    r"|frontend developer"
-    r"|front-end engineer"
-    r"|front-end developer"
-    r"|full.?stack engineer"
-    r"|full.?stack developer"
-    r"|data scientist"
-    r"|machine learning engineer"
-    r"|\bml engineer"
-    r"|\bmle\b"
-    r"|forward deployed engineer"
-    r"|applied scientist"
-    r"|\bai engineer"
-    r"|ai/ml engineer"
-    r"|ai ml engineer"
-    r"|^\s*intern\s*$"
-    r"|^\s*software intern\s*$",
-    re.IGNORECASE,
-)
+from .role_families import role_family
 
 
 def keyword_filter(jobs: list[Job]) -> list[tuple[Job, bool]]:
@@ -42,7 +10,7 @@ def keyword_filter(jobs: list[Job]) -> list[tuple[Job, bool]]:
     """
     passing, rejected = [], 0
     for job in jobs:
-        if _ACCEPT.search(job.role):
+        if role_family(job.role) is not None:
             passing.append((job, False))
         else:
             rejected += 1
