@@ -16,6 +16,10 @@ MAX_JOBS_PER_REPO: int | None = int(_max) if _max else None
 
 FIT_SCORE_THRESHOLD = 7
 
+# Stage 2b (Sonnet bullet rewriting) is temporarily disabled to cut spend.
+# Flip back to True to resume rewriting; sonnet_rewrite() itself is untouched.
+ENABLE_SONNET_REWRITE = False
+
 
 def load_seen() -> tuple[set, set]:
     """Returns (seen_links, seen_keys). Handles the legacy flat-list-of-links format."""
@@ -40,7 +44,7 @@ def main() -> None:
     from pipeline.resume_parser import parse_resume
     from pipeline.stage1_filter import keyword_filter
     from pipeline.requirements_fetcher import fetch_all_requirements
-    from pipeline.stage2_analysis import haiku_score, sonnet_rewrite
+    from pipeline.stage2_analysis import haiku_score, sonnet_rewrite, skip_rewrite
     from pipeline.sheets import ensure_header, get_existing_links, get_existing_keys, append_row, get_sheet_url
     from pipeline.notifier import send_telegram, send_run_summary
 
@@ -138,11 +142,17 @@ def main() -> None:
         send_run_summary(stats)
         return
 
-    # Stage 2b: Sonnet selects top 3 experiences and rewrites bullets
-    log.info(f"Stage 2b: Sonnet rewriting {len(above_threshold)} jobs...")
+    # Stage 2b: Sonnet selects top 3 experiences and rewrites bullets (disabled — see ENABLE_SONNET_REWRITE)
+    if ENABLE_SONNET_REWRITE:
+        log.info(f"Stage 2b: Sonnet rewriting {len(above_threshold)} jobs...")
+    else:
+        log.info(f"Stage 2b disabled: logging {len(above_threshold)} jobs without rewriting bullets...")
     for job, score in above_threshold:
-        log.info(f"  Rewriting: {job.company} — {job.role} (fit={score['fit_score']})")
-        rewrite = sonnet_rewrite(job, experiences)
+        if ENABLE_SONNET_REWRITE:
+            log.info(f"  Rewriting: {job.company} — {job.role} (fit={score['fit_score']})")
+            rewrite = sonnet_rewrite(job, experiences)
+        else:
+            rewrite = skip_rewrite(score, experiences)
         analysis = {**score, **rewrite}
         row_num = append_row(job, analysis)
         sheet_url = get_sheet_url(row_num)

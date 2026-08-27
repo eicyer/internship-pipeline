@@ -148,3 +148,24 @@ Return JSON array of exactly 3 objects ordered by relevance (most relevant first
             })
 
     return {"ranked_experiences": ranked_experiences}
+
+
+def skip_rewrite(score: dict, experiences: list[dict]) -> dict:
+    """
+    Stand-in for sonnet_rewrite while Stage 2b is disabled (see main.ENABLE_SONNET_REWRITE).
+    No API call, no rewritten bullets — just orders experiences using Haiku's top_indices
+    so sheets/notifier still get a full ranked_experiences list in the expected shape.
+    """
+    top_indices = score.get("top_indices", [])
+    ranked_experiences = [
+        {"index": i, "company": experiences[i]["company"], "role": experiences[i]["role"], "optimized_bullets": []}
+        for i in top_indices
+    ]
+    seen_indices = set(top_indices)
+    for i, exp in enumerate(experiences):
+        if i not in seen_indices:
+            ranked_experiences.append({
+                "index": i, "company": exp["company"], "role": exp["role"], "optimized_bullets": [],
+            })
+
+    return {"ranked_experiences": ranked_experiences}
