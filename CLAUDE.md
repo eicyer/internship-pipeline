@@ -40,7 +40,7 @@ Target volume: ~20 jobs/week reach Sonnet rewriting.
 
 Jobs are deduped on two independent signals, since the same posting is often listed by multiple source repos under different apply URLs (referral link vs. direct company link):
 1. **`apply_link`** — exact URL match.
-2. **`dedup_key`** (`pipeline/fetcher.py::normalize_key`) — normalized `company|role`, so the same company+title combo can't re-enter even via a different link. Same company with a *different* title, or a different company with the *same* title, are not considered duplicates.
+2. **`dedup_key`** (`pipeline/fetcher.py::normalize_key`) — normalized `company|role`. If the role matches a recognized family (see `pipeline/role_families.py`), the key uses the family name instead of the literal title, so e.g. "Software Engineer Intern" and "SWE Intern - DV Commodities" from the same company collapse into one slot — one job per company per role-family. Roles that don't match any family (shouldn't happen for anything reaching this stage, since Stage 1 already rejects them) fall back to the cleaned literal title. Same company with a *different* family, or a different company with the *same* family, are not considered duplicates.
 
 Both signals are checked at three layers:
 1. Within a single run, across the 4 source repos (`fetch_new_jobs` in `pipeline/fetcher.py`).
@@ -51,9 +51,9 @@ If the `seen_jobs.json` push ever fails, the Sheets-based dedup acts as the safe
 
 ## Stage 1 whitelist
 
-`pipeline/stage1_filter.py` uses `re.search()` against a **whitelist** (not blacklist). Only roles matching an allowed pattern pass. Allowed: software engineer, SWE, SDE, backend/frontend engineer/developer, full-stack, data scientist, ML engineer, MLE, forward deployed engineer, applied scientist, AI engineer, and exact matches for `"Intern"` and `"Software Intern"` (anchored with `^$`).
+`pipeline/stage1_filter.py` and dedup's `normalize_key` (`pipeline/fetcher.py`) share a single source of truth for recognized roles: `pipeline/role_families.py`. Its `role_family()` classifies a title into one of `software_engineer`, `backend_engineer`, `frontend_engineer`, `mle`, `data_scientist`, `forward_deployed_engineer`, `applied_scientist`, `ai_engineer`, or `intern` (exact matches for `"Intern"` / `"Software Intern"`, anchored with `^$`), or returns `None`.
 
-Anything not in the whitelist is rejected — including generic "Engineering Intern", DevOps, PM, Quant, Research Scientist, etc.
+Stage 1 is a **whitelist** (not blacklist): only roles where `role_family()` returns non-`None` pass. Anything unclassified is rejected — including generic "Engineering Intern", DevOps, PM, Quant, Research Scientist, etc.
 
 ## Updating the resume
 

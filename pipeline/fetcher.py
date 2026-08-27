@@ -39,13 +39,23 @@ _ROLE_NOISE_RE = re.compile(
 
 
 def normalize_key(company: str, role: str) -> str:
-    """Company+role identity key used for cross-repo/cross-run dedup, independent of apply_link."""
+    """
+    Company+role identity key used for cross-repo/cross-run dedup, independent of apply_link.
+    Roles that match a recognized family (pipeline/role_families.py) collapse to one slot per
+    company per family, so e.g. "Software Engineer Intern" and "SWE Intern - <team>" from the
+    same company dedup together. Unrecognized roles fall back to the cleaned full title text.
+    """
+    from .role_families import role_family
+
     def clean(text: str) -> str:
         text = text.lower()
         text = _ROLE_NOISE_RE.sub("", text)
         text = re.sub(r"[^a-z0-9]+", " ", text)
         return " ".join(text.split())
-    return f"{clean(company)}|{clean(role)}"
+
+    family = role_family(role)
+    role_part = family if family else clean(role)
+    return f"{clean(company)}|{role_part}"
 
 
 @dataclass
