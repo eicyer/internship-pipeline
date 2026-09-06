@@ -16,6 +16,7 @@ _STATUS_OPTIONS = ["To Apply", "Applied", "Interview / OA", "Offer", "Rejected"]
 _COLUMN_WIDTHS = [90, 130, 210, 120, 280, 180, 75, 80, 360, 100]
 
 _service = None
+_gid = None
 
 
 def _get_service():
@@ -32,19 +33,44 @@ def _sheet_id() -> str:
     return os.environ["GOOGLE_SHEET_ID"]
 
 
+def _get_gid() -> int:
+    """Numeric sheetId (gid) of Sheet1, cached for the process lifetime."""
+    global _gid
+    if _gid is None:
+        svc = _get_service()
+        meta = svc.spreadsheets().get(spreadsheetId=_sheet_id()).execute()
+        _gid = meta["sheets"][0]["properties"]["sheetId"]
+    return _gid
+
+
 def format_sheet() -> None:
-    """Apply one-time visual formatting: frozen header, colors, column widths, conditional rules."""
+    """Apply visual formatting: frozen header, colors, banding, borders, column widths,
+    conditional rules. Safe to call more than once — clears any conditional format
+    rules / banded ranges it previously created before re-adding them, so it can be
+    re-run to refresh formatting on a sheet that already has data (e.g. after a
+    style change) without piling up duplicate rules."""
     svc = _get_service()
     sid = _sheet_id()
-
-    # Resolve the numeric gid for Sheet1
-    meta = svc.spreadsheets().get(spreadsheetId=sid).execute()
-    gid = meta["sheets"][0]["properties"]["sheetId"]
+    gid = _get_gid()
 
     def _color(r, g, b):
         return {"red": r / 255, "green": g / 255, "blue": b / 255}
 
     requests = []
+
+    # Clear any previously-added conditional format rules and banded ranges on
+    # this sheet so re-running this function doesn't stack duplicates.
+    meta = svc.spreadsheets().get(
+        spreadsheetId=sid, fields="sheets(properties(sheetId),conditionalFormats,bandedRanges)"
+    ).execute()
+    for sheet in meta.get("sheets", []):
+        if sheet["properties"]["sheetId"] != gid:
+            continue
+        num_rules = len(sheet.get("conditionalFormats", []))
+        for i in reversed(range(num_rules)):
+            requests.append({"deleteConditionalFormatRule": {"sheetId": gid, "index": i}})
+        for band in sheet.get("bandedRanges", []):
+            requests.append({"deleteBanding": {"bandedRangeId": band["bandedRangeId"]}})
 
     # Freeze header row
     requests.append({
@@ -98,6 +124,45 @@ def format_sheet() -> None:
                 "userEnteredFormat": {"wrapStrategy": "WRAP"},
             },
             "fields": "userEnteredFormat(wrapStrategy)",
+        }
+    })
+
+    # Taller header row so the bold white-on-navy text has breathing room
+    requests.append({
+        "updateDimensionProperties": {
+            "range": {"sheetId": gid, "dimension": "ROWS", "startIndex": 0, "endIndex": 1},
+            "properties": {"pixelSize": 32},
+            "fields": "pixelSize",
+        }
+    })
+
+    # Alternating row stripes (banding) for readability. Left open-ended so it
+    # auto-extends to newly inserted rows; conditional formatting still wins
+    # over banding for the Fit Score / Grad Flag cells.
+    requests.append({
+        "addBanding": {
+            "bandedRange": {
+                "range": {"sheetId": gid, "startRowIndex": 0, "startColumnIndex": 0, "endColumnIndex": 10},
+                "rowProperties": {
+                    "headerColor": _color(30, 41, 59),
+                    "firstBandColor": _color(255, 255, 255),
+                    "secondBandColor": _color(241, 245, 249),
+                },
+            }
+        }
+    })
+
+    # Thin borders around the whole table (buffered a generous number of rows
+    # ahead so freshly inserted rows already look bordered without a re-run).
+    requests.append({
+        "updateBorders": {
+            "range": {"sheetId": gid, "startRowIndex": 0, "endRowIndex": 2000, "startColumnIndex": 0, "endColumnIndex": 10},
+            "top": {"style": "SOLID", "width": 1, "color": _color(203, 213, 225)},
+            "bottom": {"style": "SOLID", "width": 1, "color": _color(203, 213, 225)},
+            "left": {"style": "SOLID", "width": 1, "color": _color(203, 213, 225)},
+            "right": {"style": "SOLID", "width": 1, "color": _color(203, 213, 225)},
+            "innerHorizontal": {"style": "SOLID", "width": 1, "color": _color(226, 232, 240)},
+            "innerVertical": {"style": "SOLID", "width": 1, "color": _color(226, 232, 240)},
         }
     })
 
@@ -258,8 +323,12 @@ def _format_bullets_for_sheet(analysis: dict) -> str:
 
 
 def append_row(job, analysis: dict) -> int:
-    """Append one job row. Returns the 1-based row index of the new row."""
+    """Insert one job row directly under the header, so the most recent find is
+    always at the top of the sheet. Returns the 1-based row index of the new row
+    (always 2, since it lands right below the frozen header)."""
     svc = _get_service()
+    sid = _sheet_id()
+    gid = _get_gid()
     bullets = _format_bullets_for_sheet(analysis)
     skills = ", ".join(analysis.get("skills_matched", []))
     grad_flag = "YES" if analysis.get("grad_flag") else "NO"
@@ -275,19 +344,52 @@ def append_row(job, analysis: dict) -> int:
         bullets,
         "To Apply",
     ]
-    result = svc.spreadsheets().values().append(
-        spreadsheetId=_sheet_id(),
-        range="Sheet1!A1",
+
+    # Push everything down one row, inheriting formatting from the row below
+    # (an existing data row) rather than the header above.
+    svc.spreadsheets().batchUpdate(
+        spreadsheetId=sid,
+        body={"requests": [{
+            "insertDimension": {
+                "range": {"sheetId": gid, "dimension": "ROWS", "startIndex": 1, "endIndex": 2},
+                "inheritFromBefore": False,
+            }
+        }]},
+    ).execute()
+    svc.spreadsheets().values().update(
+        spreadsheetId=sid,
+        range="Sheet1!A2",
         valueInputOption="RAW",
-        insertDataOption="INSERT_ROWS",
         body={"values": [row]},
     ).execute()
-    updated_range = result.get("updates", {}).get("updatedRange", "")
-    try:
-        row_num = int(updated_range.split("!")[1].split(":")[0][1:])
-    except (IndexError, ValueError):
-        row_num = 0
-    return row_num
+    return 2
+
+
+def reorder_rows_newest_first() -> int:
+    """One-time migration: reverse the existing data rows (excluding the header)
+    so old logs — which were appended oldest-first — read newest-first like new
+    rows now do. Safe to run once; running it again just re-reverses the order,
+    so don't call it repeatedly. Returns the number of rows reordered."""
+    svc = _get_service()
+    sid = _sheet_id()
+    result = svc.spreadsheets().values().get(
+        spreadsheetId=sid, range="Sheet1!A2:J"
+    ).execute()
+    rows = result.get("values", [])
+    if len(rows) < 2:
+        return len(rows)
+
+    width = len(HEADER)
+    padded = [r + [""] * (width - len(r)) for r in rows]
+    padded.reverse()
+
+    svc.spreadsheets().values().update(
+        spreadsheetId=sid,
+        range=f"Sheet1!A2:J{len(padded) + 1}",
+        valueInputOption="RAW",
+        body={"values": padded},
+    ).execute()
+    return len(padded)
 
 
 def get_sheet_url(row_num: int = 0) -> str:
