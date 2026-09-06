@@ -9,6 +9,11 @@ Requires GOOGLE_SHEETS_CREDS and GOOGLE_SHEET_ID to be set, same as main.py.
 Safe to run once. Running it a second time will re-reverse row order, so
 don't re-run it after the sheet already reads newest-first.
 """
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from pipeline.sheets import format_sheet, reorder_rows_newest_first
 
 
