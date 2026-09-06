@@ -220,7 +220,7 @@ def format_sheet() -> None:
     score_range = {"sheetId": gid, "startRowIndex": 1, "startColumnIndex": 6, "endColumnIndex": 7}
     score_rules = [
         # red: < 7
-        ("NUMBER_LESS_THAN", "7", _color(242, 184, 181)),
+        ("NUMBER_LESS", "7", _color(242, 184, 181)),
         # yellow: = 7
         ("NUMBER_EQ", "7", _color(255, 229, 153)),
         # light green: = 8
