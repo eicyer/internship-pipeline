@@ -81,3 +81,9 @@ Four community-maintained GitHub repos are scraped via the GitHub Contents API (
 ## Output shape
 
 `sheets.py` and `notifier.py` both expect `analysis` dict with keys: `fit_score`, `skills_matched`, `grad_flag`, `ranked_experiences`. The `ranked_experiences` list has the 3 rewritten experiences first (with `optimized_bullets`), then the rest appended with empty bullets.
+
+## Sheet ordering & styling
+
+`append_row()` (`pipeline/sheets.py`) inserts each new job directly under the header row instead of appending at the bottom, so the sheet always reads newest-first. `format_sheet()` applies the visual styling (navy header, alternating row banding, thin borders, conditional color-coding for Fit Score / Grad Flag, column widths) and is idempotent — it clears any conditional format rules / banded ranges it previously created before re-adding them, so it can be safely re-run.
+
+To reorder rows logged before this change (which were appended oldest-first) and refresh their styling, run `python scripts/refresh_sheet.py` once. Don't run it twice — it reverses whatever order is currently in the sheet.
