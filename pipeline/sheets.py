@@ -8,12 +8,12 @@ from googleapiclient.discovery import build
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 HEADER = [
     "Date Found", "Company", "Role", "Location", "Link",
-    "Skills Match", "Fit Score", "Grad Flag", "Bullet Suggestions", "Status",
+    "Status", "Fit Score", "Grad Flag", "Bullet Suggestions", "Skills Match",
 ]
 
-_STATUS_OPTIONS = ["To Apply", "Applied", "Interview / OA", "Offer", "Rejected"]
+_STATUS_OPTIONS = ["To Apply", "Applied", "OA/Interview", "Rejected"]
 
-_COLUMN_WIDTHS = [90, 130, 210, 120, 280, 180, 75, 80, 360, 100]
+_COLUMN_WIDTHS = [90, 130, 210, 120, 280, 100, 75, 80, 360, 180]
 
 _service = None
 _gid = None
@@ -196,14 +196,14 @@ def format_sheet() -> None:
         }
     })
 
-    # Data validation: Status column (J = index 9)
+    # Data validation: Status column (F = index 5)
     requests.append({
         "setDataValidation": {
             "range": {
                 "sheetId": gid,
                 "startRowIndex": 1,
-                "startColumnIndex": 9,
-                "endColumnIndex": 10,
+                "startColumnIndex": 5,
+                "endColumnIndex": 6,
             },
             "rule": {
                 "condition": {
@@ -261,6 +261,31 @@ def format_sheet() -> None:
             "index": 4,
         }
     })
+
+    # Conditional formatting: Status (F = col index 5) — color-code by value
+    status_range = {"sheetId": gid, "startRowIndex": 1, "startColumnIndex": 5, "endColumnIndex": 6}
+    status_rules = [
+        ("To Apply", _color(255, 229, 153)),      # yellow
+        ("Applied", _color(183, 225, 205)),       # green
+        ("OA/Interview", _color(159, 197, 232)),  # blue
+        ("Rejected", _color(242, 184, 181)),      # red
+    ]
+    for i, (val, bg) in enumerate(status_rules):
+        requests.append({
+            "addConditionalFormatRule": {
+                "rule": {
+                    "ranges": [status_range],
+                    "booleanRule": {
+                        "condition": {
+                            "type": "TEXT_EQ",
+                            "values": [{"userEnteredValue": val}],
+                        },
+                        "format": {"backgroundColor": bg},
+                    },
+                },
+                "index": 5 + i,
+            }
+        })
 
     svc.spreadsheets().batchUpdate(
         spreadsheetId=sid, body={"requests": requests}
@@ -338,11 +363,11 @@ def append_row(job, analysis: dict) -> int:
         job.role,
         job.location,
         job.apply_link,
-        skills,
+        "To Apply",
         analysis.get("fit_score", ""),
         grad_flag,
         bullets,
-        "To Apply",
+        skills,
     ]
 
     # Push everything down one row, inheriting formatting from the row below
