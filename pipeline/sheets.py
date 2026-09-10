@@ -5,6 +5,8 @@ from datetime import date
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
+from pipeline.tracking import tracking_link
+
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 HEADER = [
     "Date Found", "Company", "Role", "Location", "Link",
@@ -386,6 +388,28 @@ def append_row(job, analysis: dict) -> int:
         range="Sheet1!A2",
         valueInputOption="RAW",
         body={"values": [row]},
+    ).execute()
+
+    # Make the Link cell (E2) clickable via the click-tracking redirect while
+    # keeping its underlying text value as the raw apply_link — get_existing_links()
+    # dedups on that raw text, so the value itself must stay untouched.
+    svc.spreadsheets().batchUpdate(
+        spreadsheetId=sid,
+        body={"requests": [{
+            "updateCells": {
+                "range": {
+                    "sheetId": gid,
+                    "startRowIndex": 1, "endRowIndex": 2,
+                    "startColumnIndex": 4, "endColumnIndex": 5,
+                },
+                "rows": [{"values": [{
+                    "userEnteredFormat": {
+                        "textFormat": {"link": {"uri": tracking_link(job.apply_link)}}
+                    }
+                }]}],
+                "fields": "userEnteredFormat.textFormat.link",
+            }
+        }]},
     ).execute()
     return 2
 

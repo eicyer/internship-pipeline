@@ -2,6 +2,8 @@ import os
 
 import requests
 
+from pipeline.tracking import tracking_link
+
 
 def _score_bar(score, total: int = 10) -> str:
     try:
@@ -37,7 +39,7 @@ def send_telegram(job, analysis: dict, sheet_url: str = "") -> None:
     text = (
         f"{divider}\n"
         f"🆕 *{job.company}* — {job.role}\n"
-        f"📍 {job.location} · [Apply Now]({job.apply_link})\n"
+        f"📍 {job.location} · [Apply Now]({tracking_link(job.apply_link)})\n"
         f"{divider}\n"
         f"⭐ Fit: {bar} {score}/10\n"
         f"🎓 Grad required: {grad_flag}\n"
