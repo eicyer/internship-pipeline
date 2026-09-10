@@ -84,6 +84,8 @@ Four community-maintained GitHub repos are scraped via the GitHub Contents API (
 
 ## Sheet ordering & styling
 
-`append_row()` (`pipeline/sheets.py`) inserts each new job directly under the header row instead of appending at the bottom, so the sheet always reads newest-first. `format_sheet()` applies the visual styling (navy header, alternating row banding, thin borders, conditional color-coding for Fit Score / Grad Flag, column widths) and is idempotent — it clears any conditional format rules / banded ranges it previously created before re-adding them, so it can be safely re-run.
+`append_row()` (`pipeline/sheets.py`) inserts each new job directly under the header row instead of appending at the bottom, so the sheet always reads newest-first. `format_sheet()` applies the visual styling (navy header, alternating row banding, thin borders, conditional color-coding for Status / Fit Score / Grad Flag, column widths) and is idempotent — it clears any conditional format rules / banded ranges it previously created before re-adding them, so it can be safely re-run.
+
+Columns (`HEADER` in `pipeline/sheets.py`): Date Found, Company, Role, Location, Link, Status, Fit Score, Grad Flag, Bullet Suggestions, Skills Match — Skills Match sits rightmost, and Status (a dropdown defaulting to `To Apply`, with values `To Apply`/`Applied`/`OA/Interview`/`Rejected` color-coded yellow/green/blue/red) takes the column it used to occupy.
 
 To reorder rows logged before this change (which were appended oldest-first) and refresh their styling, run `python scripts/refresh_sheet.py` once. Don't run it twice — it reverses whatever order is currently in the sheet.
