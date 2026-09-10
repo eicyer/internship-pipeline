@@ -29,6 +29,7 @@ jobs:
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TRACKING_BASE_URL: ${{ secrets.TRACKING_BASE_URL }}
         run: python main.py
 
       - name: Save dedup state
