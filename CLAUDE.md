@@ -10,7 +10,7 @@ MAX_JOBS_PER_REPO=7 python main.py
 
 `MAX_JOBS_PER_REPO=7` caps each of the 4 repos to 7 rows (~28 jobs total) so you don't burn API credits or flood Sheets during development. Leave it unset in production — the cron only sees the delta anyway.
 
-All secrets (`ANTHROPIC_API_KEY`, `GOOGLE_SHEETS_CREDS`, `GOOGLE_SHEET_ID`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `GH_PAT`) must be set as environment variables locally.
+All secrets (`ANTHROPIC_API_KEY`, `GOOGLE_SHEETS_CREDS`, `GOOGLE_SHEET_ID`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `GH_PAT`) must be set as environment variables locally. `TRACKING_BASE_URL` is optional (see "Click-to-apply tracking" below) — the pipeline runs fine without it, it just skips the auto-Applied behavior.
 
 ## Pipeline flow
 
@@ -89,3 +89,16 @@ Four community-maintained GitHub repos are scraped via the GitHub Contents API (
 Columns (`HEADER` in `pipeline/sheets.py`): Date Found, Company, Role, Location, Link, Status, Fit Score, Grad Flag, Bullet Suggestions, Skills Match — Skills Match sits rightmost, and Status (a dropdown defaulting to `To Apply`, with values `To Apply`/`Applied`/`OA/Interview`/`Rejected` color-coded yellow/green/blue/red) takes the column it used to occupy.
 
 To reorder rows logged before this change (which were appended oldest-first) and refresh their styling, run `python scripts/refresh_sheet.py` once. Don't run it twice — it reverses whatever order is currently in the sheet.
+
+## Click-to-apply tracking
+
+Clicking the apply link — from Telegram's "Apply Now" button or the Sheet's Link column — flips that row's Status from `To Apply` to `Applied` automatically, on the assumption that clicking means you're applying.
+
+There's no persistent server in this pipeline (it only runs on GitHub Actions cron), so the redirect hop is handled by a small Google Apps Script Web App bound to the same Sheet — free, and it can edit the Sheet directly. Source lives in `appscript/click_tracker.gs`; deploy it once by following the comment at the top of that file (paste into Extensions -> Apps Script on the Sheet, set `SPREADSHEET_ID`, deploy as a Web App, "Execute as: Me" / "Who has access: Anyone"), then set the deployment's `/exec` URL as `TRACKING_BASE_URL`.
+
+How it's wired on the Python side:
+- `pipeline/tracking.py::tracking_link(apply_link)` wraps a raw apply link as `{TRACKING_BASE_URL}?link={apply_link}`. If `TRACKING_BASE_URL` isn't set, it returns the raw link unchanged — the feature is opt-in and never breaks the pipeline.
+- `notifier.py` uses `tracking_link()` for the Telegram "Apply Now" URL.
+- `sheets.py::append_row()` keeps the Link cell's underlying text value as the raw `apply_link` (since `get_existing_links()` dedups on that raw text) but attaches the tracking URL as a rich-text hyperlink override (`userEnteredFormat.textFormat.link`), so clicking the cell in Sheets goes through the tracker while the dedup logic is untouched.
+
+The Apps Script only flips Status if it's still `To Apply` — clicking an already-`Applied`/`Rejected`/etc. row's link won't stomp on a status you've since changed by hand.
