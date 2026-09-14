@@ -16,7 +16,7 @@
 // "Applied" if that's still its value, then redirects the browser on to the
 // real posting.
 
-const SPREADSHEET_ID = 'PUT_YOUR_GOOGLE_SHEET_ID_HERE'; // same value as the GOOGLE_SHEET_ID secret
+const SPREADSHEET_ID = '1noR9ahhlH-JDm-kZlB-7wd7xyuMpM23kvgWsyklEMVwzwrNoR47XpLwb'; // same value as the GOOGLE_SHEET_ID secret
 const SHEET_NAME = 'Sheet1';
 const LINK_COL = 5;   // E
 const STATUS_COL = 6; // F
