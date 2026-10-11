@@ -1,4 +1,5 @@
 import os
+import time
 
 import requests
 
@@ -11,6 +12,25 @@ def _score_bar(score, total: int = 10) -> str:
     except (TypeError, ValueError):
         return "?"
     return "🟩" * filled + "⬜" * (total - filled)
+
+
+def _post_telegram(token: str, payload: dict, label: str) -> None:
+    """POSTs a sendMessage call, retrying on network errors/timeouts. Never raises:
+    a Telegram hiccup must not abort the run (the job is already in Sheets, and
+    seen_jobs.json still needs to be saved afterwards)."""
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    for attempt in range(3):
+        try:
+            resp = requests.post(url, json=payload, timeout=20)
+        except requests.RequestException as e:
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+                continue
+            print(f"Telegram {label} failed after 3 attempts: {e}")
+            return
+        if not resp.ok:
+            print(f"Telegram error ({label}): {resp.status_code} {resp.text}")
+        return
 
 
 def send_telegram(job, analysis: dict, sheet_url: str = "") -> None:
@@ -52,16 +72,13 @@ def send_telegram(job, analysis: dict, sheet_url: str = "") -> None:
     if sheet_url:
         text += f"\n\n[📊 Open in Sheets →]({sheet_url})"
 
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
         "chat_id": chat_id,
         "text": text,
         "parse_mode": "Markdown",
         "disable_web_page_preview": True,
     }
-    resp = requests.post(url, json=payload, timeout=10)
-    if not resp.ok:
-        print(f"Telegram error: {resp.status_code} {resp.text}")
+    _post_telegram(token, payload, "job")
 
 
 def send_run_summary(stats: dict) -> None:
@@ -99,13 +116,10 @@ def send_run_summary(stats: dict) -> None:
     if drop_parts:
         text += f"\n🚫 Dropped: {' · '.join(drop_parts)}"
 
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
         "chat_id": chat_id,
         "text": text,
         "parse_mode": "Markdown",
         "disable_web_page_preview": True,
     }
-    resp = requests.post(url, json=payload, timeout=10)
-    if not resp.ok:
-        print(f"Telegram error (summary): {resp.status_code} {resp.text}")
+    _post_telegram(token, payload, "summary")

@@ -33,10 +33,18 @@ function doGet(e) {
   }
 
   var dest = link || 'https://www.google.com';
+  // Apps Script serves HtmlService output inside a sandboxed iframe on
+  // googleusercontent.com, so a plain meta-refresh / window.location only
+  // navigates that inner iframe — most job sites refuse to be framed, leaving
+  // you stuck on the script.google.com page. The redirect has to target the
+  // top window. The sandbox may block automatic top navigation (it requires a
+  // user gesture), so the link below also targets _top as a one-click fallback.
   return HtmlService.createHtmlOutput(
-    '<html><head><meta http-equiv="refresh" content="0; url=' + escapeHtml_(dest) + '"></head>' +
-    '<body>Redirecting… <a href="' + escapeHtml_(dest) + '">Click here if you are not redirected</a>' +
-    '<script>window.location.replace(' + JSON.stringify(dest) + ');</script>' +
+    '<html><head><base target="_top"></head>' +
+    '<body style="font-family:sans-serif;text-align:center;margin-top:20vh">' +
+    '<p>Redirecting to the job posting…</p>' +
+    '<a href="' + escapeHtml_(dest) + '" target="_top" style="font-size:20px">Open the job posting &rarr;</a>' +
+    '<script>try { window.top.location.href = ' + JSON.stringify(dest) + '; } catch (e) {}</script>' +
     '</body></html>'
   );
 }
