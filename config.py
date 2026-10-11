@@ -1,111 +1,133 @@
 SKILLS = [
-    "Python",
-    "JavaScript",
-    "React",
-    "SQL",
-    "Java",
-    "Node.js",
-    "Claude Code", "Java", "OCaml",  "scikit-learn", "pandas", "PostgreSQL", "HTML"
+    "Python", "React", "Node.js", "Java", "Flask", "scikit-learn",
+    "PySpark", "MLlib", "Pandas", "Claude API", "Claude Code", "Anthropic API",
+    "PostgreSQL", "Git", "Supabase", "Railway", "Vercel",
 ]
 
+# Company `id`s Sonnet is allowed to rewrite bullets for (pipeline/latex_tailor.py).
+# Empty until you hand over the list of companies worth tailoring for.
+LATEX_TAILOR_COMPANIES: list[str] = []
+
 EXPERIENCES = [
-  {
-    "company": "Carriage",
-    "role": "Software Developer",
-    "time": "November 2025 - Present",
-    "skills": ["PostgreSQL", "Node.js", "REST API", "auth", "database migration", "Claude Code", "full-stack"],
-    "bullets": [
-      "Shipped the end-to-end ride-request workflow, model and UI, using Claude Code to accelerate development",
-      "Leading a DynamoDB-to-PostgreSQL migration unlocking low-cost horizontal scalability across 3 servers",
-      "Fixed cross-rider API access vulnerability using Claude Code to trace, diagnose, and patch the auth flow"
-    ]
-  },
-  {
-    "company": "ARA X Cornell Hackathon",
-    "role": "Software Developer",
-    "time": "April 2026",
-    "skills": ["AI agents", "Supabase", "Gmail API", "Slack API", "LLM tooling", "Claude Code", "structured prompts"],
-    "bullets": [
-      "Built an AI agent using Ara SDK to scan Gmail and Slack for commitments and surface overdue items",
-      "Designed Supabase-backed agentic tools with structured prompts to guide reliable multi-source reasoning",
-      "Shipped schema to working agent in one day using Claude Code to scaffold and refine AI-generated tool logic"
-    ]
-  },
-  {
-    "company": "Pac-Mann",
-    "role": "Software Developer",
-    "time": "October 2025 - November 2025",
-    "skills": ["algorithms", "data structures", "hash table", "heap", "Dijkstra", "optimization", "complexity analysis"],
-    "bullets": [
-      "Implemented custom hash table and binary min-heap to achieve optimized maze pathfinding performance",
-      "Developed a modified Dijkstra's algorithm to enable maze traversal with O((V+E) log V) complexity",
-      "Analyzed time–space tradeoffs and stress-tested performance under adversarial maze layouts"
-    ]
-  },
-  {
-    "company": "Bearbox",
-    "role": "Software Developer",
-    "time": "November 2025 - Present",
-    "skills": ["React", "Node.js", "MVP", "routing", "state management", "Claude Code", "Git"],
-    "bullets": [
-      "Shipped a React + Node.js package-tracking MVP in 3 days using Claude Code and Cursor to scaffold and iterate",
-      "Built routing, state management, and responsive UI directing Claude Code for back-end and Cursor for front-end",
-      "Maintained code quality across a 3-day sprint using AI-assisted review in Git workflows with a partner"
-    ]
-  },
-  {
-    "company": "Tournaid",
-    "role": "Software Developer",
-    "time": "September 2023 - May 2025",
-    "skills": ["Django", "SQLite", "Python", "full-stack", "automation", "web platform", "database design"],
-    "bullets": [
-      "Built a Django full-stack platform to automate attendance and scoring workflows through modular design",
-      "Led end-to-end delivery to generate $120 revenue and engage 500+ users through iterative prototyping and testing",
-      "Saved 45 minutes of manual labor and reduced mismatches by 0.75 per tournament leveraging SQLite database"
-    ]
-  },
-  {
-    "company": "Pioneer Academics Research Institute, Oberlin College",
-    "role": "Data Science Researcher",
-    "time": "June 2024 - September 2024",
-    "skills": ["NLP", "pandas", "scikit-learn", "LDA", "VADER", "data analysis", "visualization"],
-    "bullets": [
-      "Analyzed bot activity across >3.6M tweets to surface behavioral patterns and inform detection insights",
-      "Calculated skewness/kurtosis and built visualizations to reveal interaction trends and guide data-driven evaluation",
-      "Built reproducible NLP pipelines (LDA, VADER) to classify coordinated inauthentic behavior"
-    ]
-  },
-  {
-    "company": "TUBİTAK",
-    "role": "Machine Learning Intern",
-    "time": "July 2023",
-    "skills": ["PySpark", "ML models", "autoencoder", "distributed systems", "data pipelines", "Python", "agile"],
-    "bullets": [
-      "Built distributed PySpark data pipelines for large-scale CPI and regional economic data analysis",
-      "Collaborated with an agile team in the Cloud Computing Lab through iterative model implementation and testing",
-      "Researched and validated ML models to raise accuracy from 0.65 to 0.87 by deploying an autoencoder"
-    ]
-  },
-  {
-    "company": "World Schools Debating Championship (WSDC)",
-    "role": "Turkish National Debate Team Captain",
-    "time": "March 2024 - August 2025",
-    "skills": ["leadership", "public speaking", "sponsorship", "fundraising", "team management", "communication"],
-    "bullets": [
-      "Demonstrated problem-solving and communication under pressure and achieved #1 speaker ranking in Turkey",
-      "Led the team to craft comprehensive sponsorship proposals and cultivate relationships with local businesses",
-      "Pitched to 8+ sponsors and secured $5K in funding through clear goal articulation and relationship building"
-    ]
-  },
-  {
-    "company": "CodeFest",
-    "role": "Head of Workshop Committee",
-    "time": "September 2023 - April 2024",
-    "skills": ["AI/ML", "deep learning", "NLP", "transformers", "event organization", "outreach", "workshops"],
-    "bullets": [
-      "Coordinated outreach to professors and industry experts, securing workshops on AI and emerging technologies",
-      "Organized and managed sessions on deep learning, transformers, and NLP for attending students",
-      "Facilitated discussions on AI implications and industry trends, enhancing student engagement and learning"
-    ]
-  }
+    {
+        "id": "turkish_technology",
+        "section": "experience",
+        "company": "Turkish Technology (Turkish Airlines Subsidiary)",
+        "role": "Software Engineer Intern",
+        "location": "Istanbul, Turkey",
+        "time": "June 2026 -- July 2026",
+        "skills": ["JWT auth", "API security", "React", "data pipelines", "test coverage", "iframe embedding", "postMessage"],
+        "bullets": [
+            "Engineered a secure multi-partner data-sharing API (Cargy/TK GO), eliminating an unauthenticated data-leak by architecting scoped JWT auth with fail-closed key verification and automated test coverage",
+            "Built an idempotent COMIS/JMS ingestion pipeline replacing a manual shipment data-entry workflow, with a fault-tolerant parsing layer backed by 191 lines of edge-case test coverage",
+            "Implemented an embeddable live-tracking iframe for external partners, unifying three user views (partner, demo, operator) via a token-scoped React component with postMessage resizing and error handling",
+        ],
+    },
+    {
+        "id": "cornell_dti",
+        "section": "experience",
+        "company": "Cornell Digital Tech and Innovation",
+        "role": "Software Developer",
+        "location": "Ithaca, NY",
+        "time": "November 2025 -- Present",
+        "skills": ["React", "DynamoDB", "PostgreSQL", "database migration", "JWT", "auth", "full-stack"],
+        "bullets": [
+            "Shipped the end-to-end ride-request workflow, model, and UI, enabling 100+ test riders to onboard smoothly",
+            "Leading a DynamoDB-to-PostgreSQL migration to unlock horizontal scalability across 3 servers",
+            "Identified and resolved a JWT security vulnerability affecting authentication across 3 API endpoints",
+        ],
+    },
+    {
+        "id": "tubitak",
+        "section": "experience",
+        "company": "TUBITAK - The Scientific and Technological Research Council of Turkey",
+        "role": "Machine Learning Intern",
+        "location": "Gebze, Turkey",
+        "time": "June 2023 -- July 2023",
+        "skills": ["PySpark", "ML models", "autoencoder", "distributed systems", "data pipelines", "Python"],
+        "bullets": [
+            "Engineered 2 PySpark pipelines processing 4 GB of data for monthly CPI and regional indices reporting",
+            "Improved ML model accuracy from 0.65 to 0.87 by deploying an autoencoder",
+        ],
+    },
+    {
+        "id": "pioneer_academics",
+        "section": "experience",
+        "company": "Pioneer Academics Research Institute, Oberlin College",
+        "role": "Data Science Researcher",
+        "location": "Remote",
+        "time": "June 2024 -- September 2024",
+        "skills": ["NLP", "LDA", "VADER", "data analysis", "pandas"],
+        "bullets": [
+            "Analyzed 3.6M+ tweets with NLP (LDA, VADER) to classify bot strategies and behavioral patterns",
+        ],
+    },
+    {
+        "id": "cornell_dining_planner",
+        "section": "project",
+        "company": "Cornell Dining Planner",
+        "role": "",
+        "location": "",
+        "time": "July 2026 -- Present",
+        "tech_stack": "FastAPI, PostgreSQL, React Native, Expo, OAuth",
+        "skills": ["FastAPI", "PostgreSQL", "React Native", "Expo", "OAuth", "optimization", "iOS"],
+        "bullets": [
+            "Built a personalization engine---OAuth login, macro/calorie goals, allergen/diet constraints, preference tags---feeding an optimizer that solves exact meal portions to each user's macro targets across 10 dining halls",
+            "Built a FastAPI + Postgres backend and one Expo/React Native codebase shipping as an iOS app and a desktop website, grounding 255 menu items in real USDA nutrition data (230 matched, 0 failures)",
+        ],
+    },
+    {
+        "id": "internship_pipeline_agent",
+        "section": "project",
+        "company": "Internship Pipeline Agent",
+        "role": "",
+        "location": "",
+        "time": "June 2026 -- Present",
+        "tech_stack": "Python, Anthropic API, GitHub, Google Sheets, Telegram",
+        "skills": ["Python", "Anthropic API", "GitHub API", "Google Sheets API", "Telegram API", "agentic pipelines"],
+        "bullets": [
+            "Built an agentic pipeline integrating 5+ APIs (Anthropic, GitHub, Google Sheets, Telegram) to discover and score listings daily",
+            "Architected a 3-stage cost-gating funnel (regex, Haiku fit-score, 7/10 gate) capping Sonnet rewrites to $\\sim$20/week",
+        ],
+    },
+    {
+        "id": "ara_hackathon",
+        "section": "project",
+        "company": "ARA X Cornell Hackathon",
+        "role": "",
+        "location": "",
+        "time": "April 2026",
+        "tech_stack": "Ara SDK, Claude Code, Gmail API, Slack API",
+        "skills": ["AI agents", "Ara SDK", "Gmail API", "Slack API", "Claude Code"],
+        "bullets": [
+            "Built an AI agent using Ara SDK to scan Gmail and Slack for commitments and surface overdue items",
+            "Delivered a working agent from schema to production in one day using Claude Code to scaffold and refine tool logic",
+        ],
+    },
+    {
+        "id": "tournaid",
+        "section": "project",
+        "company": "Istanbul Tournament Management App: Tournaid",
+        "role": "",
+        "location": "",
+        "time": "September 2023 -- May 2025",
+        "tech_stack": "Django, Python",
+        "skills": ["Django", "Python", "full-stack", "automation"],
+        "bullets": [
+            "Built a Django full-stack platform to automate attendance and scoring workflows through modular design",
+            "Led end-to-end delivery to generate \\$120 in revenue and engage 500+ users through iterative prototyping",
+        ],
+    },
+    {
+        "id": "wsdc",
+        "section": "experience",
+        "company": "World Schools Debating Championship (WSDC)",
+        "role": "Turkish National Debate Team Captain",
+        "location": "",
+        "time": "March 2024 -- August 2025",
+        "skills": ["leadership", "public speaking", "sponsorship", "fundraising"],
+        "bullets": [
+            "Achieved \\#1 speaker ranking in Turkey; pitched to 8+ sponsors and secured \\$5K in funding",
+        ],
+    },
 ]
