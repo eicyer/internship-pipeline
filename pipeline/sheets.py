@@ -1,11 +1,16 @@
 import json
+import logging
 import os
+import time
 from datetime import date
 
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 from pipeline.tracking import tracking_link
+
+log = logging.getLogger(__name__)
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 HEADER = [
@@ -33,6 +38,30 @@ def _get_service():
 
 def _sheet_id() -> str:
     return os.environ["GOOGLE_SHEET_ID"]
+
+
+def _execute(request, retries: int = 5):
+    """request.execute() with exponential backoff on rate limits (429) and
+    transient server errors (5xx). Waits 2, 4, 8, 16, 32s — enough to roll over
+    the per-minute write quota window."""
+    for attempt in range(retries + 1):
+        try:
+            return request.execute()
+        except HttpError as e:
+            if attempt == retries or e.resp.status not in (429, 500, 502, 503, 504):
+                raise
+            wait = 2 ** (attempt + 1)
+            log.warning(f"Sheets API {e.resp.status}, retrying in {wait}s ({attempt + 1}/{retries})")
+            time.sleep(wait)
+
+
+def _cell_value(v) -> dict:
+    """Mirror valueInputOption=RAW: numbers stay numbers, everything else is literal text."""
+    if isinstance(v, bool):
+        return {"boolValue": v}
+    if isinstance(v, (int, float)):
+        return {"numberValue": v}
+    return {"stringValue": str(v)}
 
 
 def _get_gid() -> int:
@@ -372,45 +401,39 @@ def append_row(job, analysis: dict) -> int:
         skills,
     ]
 
-    # Push everything down one row, inheriting formatting from the row below
-    # (an existing data row) rather than the header above.
-    svc.spreadsheets().batchUpdate(
-        spreadsheetId=sid,
-        body={"requests": [{
-            "insertDimension": {
-                "range": {"sheetId": gid, "dimension": "ROWS", "startIndex": 1, "endIndex": 2},
-                "inheritFromBefore": False,
-            }
-        }]},
-    ).execute()
-    svc.spreadsheets().values().update(
-        spreadsheetId=sid,
-        range="Sheet1!A2",
-        valueInputOption="RAW",
-        body={"values": [row]},
-    ).execute()
-
-    # Make the Link cell (E2) clickable via the click-tracking redirect while
+    cells = [{"userEnteredValue": _cell_value(v)} for v in row]
+    # Make the Link cell (E) clickable via the click-tracking redirect while
     # keeping its underlying text value as the raw apply_link — get_existing_links()
     # dedups on that raw text, so the value itself must stay untouched.
-    svc.spreadsheets().batchUpdate(
+    cells[4]["userEnteredFormat"] = {
+        "textFormat": {"link": {"uri": tracking_link(job.apply_link)}}
+    }
+
+    # One batchUpdate per job (Sheets caps writes at 60/min/user): push everything
+    # down one row, inheriting formatting from the row below (an existing data row)
+    # rather than the header above, then fill the new row.
+    _execute(svc.spreadsheets().batchUpdate(
         spreadsheetId=sid,
-        body={"requests": [{
-            "updateCells": {
-                "range": {
-                    "sheetId": gid,
-                    "startRowIndex": 1, "endRowIndex": 2,
-                    "startColumnIndex": 4, "endColumnIndex": 5,
-                },
-                "rows": [{"values": [{
-                    "userEnteredFormat": {
-                        "textFormat": {"link": {"uri": tracking_link(job.apply_link)}}
-                    }
-                }]}],
-                "fields": "userEnteredFormat.textFormat.link",
-            }
-        }]},
-    ).execute()
+        body={"requests": [
+            {
+                "insertDimension": {
+                    "range": {"sheetId": gid, "dimension": "ROWS", "startIndex": 1, "endIndex": 2},
+                    "inheritFromBefore": False,
+                }
+            },
+            {
+                "updateCells": {
+                    "range": {
+                        "sheetId": gid,
+                        "startRowIndex": 1, "endRowIndex": 2,
+                        "startColumnIndex": 0, "endColumnIndex": len(row),
+                    },
+                    "rows": [{"values": cells}],
+                    "fields": "userEnteredValue,userEnteredFormat.textFormat.link",
+                }
+            },
+        ]},
+    ))
     return 2
 
 
