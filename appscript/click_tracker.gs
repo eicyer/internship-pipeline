@@ -7,8 +7,10 @@
 //   4. Deploy -> New deployment -> type "Web app".
 //        - Execute as: Me
 //        - Who has access: Anyone
-//   5. Copy the deployment's /exec URL and set it as the TRACKING_BASE_URL
-//      secret (GitHub Actions) / env var (local runs).
+//   5. Copy the deployment's /exec URL into the Cloudflare Worker's
+//      APPS_SCRIPT_URL (see cloudflare/README.md). TRACKING_BASE_URL should
+//      point at the Worker, not here: Apps Script can't issue a real redirect,
+//      so linking here directly costs an extra click.
 //
 // What it does: every apply link the pipeline sends (Telegram + the Sheet's
 // Link column) is wrapped to point here first. A click looks up the job by
@@ -32,6 +34,14 @@ function doGet(e) {
     }
   }
 
+  // Background ping from the Cloudflare Worker (cloudflare/worker.js), which
+  // already redirected the user — just acknowledge, no page to render.
+  if (e.parameter && e.parameter.mode === 'mark') {
+    return ContentService.createTextOutput('ok');
+  }
+
+  // Legacy path: links that point here directly (rows logged before the
+  // Worker was set up) still get the one-click interstitial below.
   var dest = link || 'https://www.google.com';
   // Apps Script serves HtmlService output inside a sandboxed iframe on
   // googleusercontent.com, so a plain meta-refresh / window.location only

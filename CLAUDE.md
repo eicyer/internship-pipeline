@@ -94,7 +94,11 @@ To reorder rows logged before this change (which were appended oldest-first) and
 
 Clicking the apply link — from Telegram's "Apply Now" button or the Sheet's Link column — flips that row's Status from `To Apply` to `Applied` automatically, on the assumption that clicking means you're applying.
 
-There's no persistent server in this pipeline (it only runs on GitHub Actions cron), so the redirect hop is handled by a small Google Apps Script Web App bound to the same Sheet — free, and it can edit the Sheet directly. Source lives in `appscript/click_tracker.gs`; deploy it once by following the comment at the top of that file (paste into Extensions -> Apps Script on the Sheet, set `SPREADSHEET_ID`, deploy as a Web App, "Execute as: Me" / "Who has access: Anyone"), then set the deployment's `/exec` URL as `TRACKING_BASE_URL`.
+There's no persistent server in this pipeline (it only runs on GitHub Actions cron), so the redirect hop is split across two free pieces:
+- **Cloudflare Worker** (`cloudflare/worker.js`) — `TRACKING_BASE_URL` points here. It returns an immediate 302 to the job posting (one click, no interstitial) and, in the background, pings the Apps Script with `&mode=mark`.
+- **Google Apps Script Web App** (`appscript/click_tracker.gs`), bound to the Sheet — does the actual Status flip. It can't be the redirect itself: Apps Script serves HTML in a sandboxed iframe that blocks automatic top-level navigation, which forced an extra click.
+
+Setup steps are in `cloudflare/README.md`. Links that still point straight at the Apps Script (rows logged before the Worker) keep working via its legacy one-click interstitial.
 
 How it's wired on the Python side:
 - `pipeline/tracking.py::tracking_link(apply_link)` wraps a raw apply link as `{TRACKING_BASE_URL}?link={apply_link}`. If `TRACKING_BASE_URL` isn't set, it returns the raw link unchanged — the feature is opt-in and never breaks the pipeline.

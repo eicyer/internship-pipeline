@@ -1,0 +1,7 @@
+name = "apply-redirect"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+[vars]
+# Paste the Apps Script Web App's /exec URL here (see cloudflare/README.md).
+APPS_SCRIPT_URL = ""
